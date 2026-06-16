@@ -82,6 +82,10 @@ type Options struct {
 	SourceName string
 	// directory local image refs resolve against ("" disables image inlining)
 	SourceDir string
+	// ImageFingerprint captures local image dependencies that are inlined into
+	// Markdown output. It is computed by callers that have the source bytes and
+	// folded into cache freshness.
+	ImageFingerprint string
 	// ReportTag distinguishes report-plan renders from legacy Markdown/plain
 	// renders in the cache fingerprint. Empty preserves legacy cache behavior.
 	ReportTag string
@@ -100,13 +104,19 @@ func (o Options) cacheTag() string {
 		b.WriteString("+plain")
 	}
 	if o.Lang != "" {
-		b.WriteString("+lang=" + o.Lang)
+		appendCacheTag(&b, "lang", o.Lang)
+	}
+	if o.FallbackTitle != "" {
+		appendCacheTag(&b, "title", o.FallbackTitle)
+	}
+	if o.SourceName != "" {
+		appendCacheTag(&b, "source", o.SourceName)
 	}
 	if o.MaxWidth != "" {
-		b.WriteString("+w=" + o.MaxWidth)
+		appendCacheTag(&b, "w", o.MaxWidth)
 	}
 	if o.Theme != "" {
-		b.WriteString("+theme=" + o.Theme)
+		appendCacheTag(&b, "theme", o.Theme)
 	}
 	if o.TOC != nil {
 		if *o.TOC {
@@ -116,9 +126,21 @@ func (o Options) cacheTag() string {
 		}
 	}
 	if o.ReportTag != "" {
-		b.WriteString("+report=" + o.ReportTag)
+		appendCacheTag(&b, "report", o.ReportTag)
+	}
+	if o.ImageFingerprint != "" {
+		appendCacheTag(&b, "img", o.ImageFingerprint)
 	}
 	return b.String()
+}
+
+func appendCacheTag(b *strings.Builder, key, value string) {
+	b.WriteString("+")
+	b.WriteString(key)
+	b.WriteString(":")
+	b.WriteString(strconv.Itoa(len(value)))
+	b.WriteString(":")
+	b.WriteString(value)
 }
 
 // Render converts source into a complete, self-contained HTML document — as
@@ -133,11 +155,12 @@ func Render(src []byte, opts Options) (string, error) {
 	}
 	pc := parser.NewContext()
 	pc.Set(baseDirKey, opts.SourceDir)
+	doc := md.Parser().Parse(text.NewReader(src), parser.WithContext(pc))
 	var buf bytes.Buffer
-	if err := md.Convert(src, &buf, parser.WithContext(pc)); err != nil {
+	if err := md.Renderer().Render(&buf, src, doc); err != nil {
 		return "", err
 	}
-	title, fromHeading, headings := analyze(md, src, opts.FallbackTitle)
+	title, fromHeading, headings := analyze(doc, src, opts.FallbackTitle)
 	content := buf.String()
 	if !fromHeading {
 		// The document has no usable level-1 heading, so it would open with no
@@ -174,14 +197,13 @@ type heading struct {
 	id    string // goldmark auto-generated heading id
 }
 
-// analyze parses src and returns the page title (first level-1 heading text,
-// HTML-escaped and trimmed, or the escaped fallback), whether that title came
-// from a real heading, and the h2/h3 headings (in document order) used to build
-// the table of contents. ids are read straight from the parsed AST, so TOC
-// links match the ids goldmark renders into the body.
-func analyze(m goldmark.Markdown, src []byte, fallback string) (title string, fromHeading bool, headings []heading) {
-	node := m.Parser().Parse(text.NewReader(src))
-
+// analyze walks an already-parsed document node and returns the page title
+// (first level-1 heading text, HTML-escaped and trimmed, or the escaped
+// fallback), whether that title came from a real heading, and the h2/h3
+// headings (in document order) used to build the table of contents. ids are
+// read straight from the parsed AST, so TOC links match the ids goldmark
+// renders into the body.
+func analyze(node ast.Node, src []byte, fallback string) (title string, fromHeading bool, headings []heading) {
 	_ = ast.Walk(node, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering {
 			return ast.WalkContinue, nil
