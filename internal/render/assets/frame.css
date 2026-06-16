@@ -1,0 +1,54 @@
+/* frame.css — faux terminal-window chrome for --frame (plain/ANSI output).
+   Inert without the .term-frame wrapper that wrapPage emits when Options.Frame
+   is set. Reuses base.css color tokens so it tracks the light/dark theme. */
+.term-frame {
+  margin: 1.5rem 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--code-bg);
+  box-shadow: var(--shadow);
+}
+.term-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.8rem;
+  background: var(--panel-bg);
+  border-bottom: 1px solid var(--border);
+}
+.term-dots {
+  display: inline-flex;
+  gap: 0.4rem;
+  flex: 0 0 auto;
+}
+.term-dots i {
+  width: 0.72rem;
+  height: 0.72rem;
+  border-radius: 50%;
+  display: inline-block;
+}
+.term-dots i:nth-child(1) { background: #ff5f56; }
+.term-dots i:nth-child(2) { background: #ffbd2e; }
+.term-dots i:nth-child(3) { background: #27c93f; }
+.term-title {
+  flex: 1 1 auto;
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.term-body {
+  overflow-x: auto;
+}
+.term-body pre {
+  margin: 0;
+  padding: 1rem 1.1rem;
+  background: transparent;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}

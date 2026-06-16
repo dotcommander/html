@@ -75,6 +75,13 @@ func wrapPage(title, body string, opts Options) string {
 		widthOverride = fmt.Sprintf("\n.markdown-body { max-width: %s; }", opts.MaxWidth)
 	}
 
+	frameStyle := ""
+	content := body
+	if opts.Frame {
+		frameStyle = "\n" + frameCSS()
+		content = terminalFrame(title, body)
+	}
+
 	var w strings.Builder
 	fmt.Fprintf(&w, `<!DOCTYPE html>
 <html lang="en">
@@ -87,7 +94,7 @@ func wrapPage(title, body string, opts Options) string {
   <title>%s</title>
   <style>
 %s
-%s%s
+%s%s%s
   </style>
 </head>
 <body>
@@ -106,6 +113,16 @@ func wrapPage(title, body string, opts Options) string {
   </script>
 </body>
 </html>
-`, themeDefault, themeJS(), title, baseCSS(), highlightCSS(), widthOverride, body, copyJS(), headingsJS(), reportJS())
+`, themeDefault, themeJS(), title, baseCSS(), highlightCSS(), widthOverride, frameStyle, content, copyJS(), headingsJS(), reportJS())
 	return w.String()
+}
+
+// terminalFrame wraps a plain/ANSI body in faux terminal-window chrome (a title
+// bar with traffic-light dots over the body). title must already be HTML-escaped
+// by the caller; body is the already-rendered <pre> content.
+func terminalFrame(title, body string) string {
+	return `<div class="term-frame"><div class="term-bar">` +
+		`<span class="term-dots"><i></i><i></i><i></i></span>` +
+		`<span class="term-title">` + title + `</span></div>` +
+		`<div class="term-body">` + body + `</div></div>`
 }

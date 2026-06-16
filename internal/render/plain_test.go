@@ -55,3 +55,36 @@ func TestRenderPlain_LangTextForcesRaw(t *testing.T) {
 		t.Errorf("Lang=text must force raw plaintext, got:\n%s", out)
 	}
 }
+
+func TestRenderPlain_Frame(t *testing.T) {
+	t.Parallel()
+	src := "build started\nok\n"
+	out, err := Render([]byte(src), Options{FallbackTitle: "build.log", Plain: true, Frame: true})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if !strings.Contains(out, `class="term-frame"`) {
+		t.Errorf("expected terminal-window frame wrapper, got:\n%s", out)
+	}
+	if !strings.Contains(out, `class="term-title">build.log<`) {
+		t.Errorf("expected the title bar to show the page title")
+	}
+	if !strings.Contains(out, `class="term-body"`) || !strings.Contains(out, "build started") {
+		t.Errorf("expected the framed body to contain the rendered content, got:\n%s", out)
+	}
+	if !strings.Contains(out, ".term-frame {") {
+		t.Errorf("expected frame CSS to be injected when Frame is set")
+	}
+}
+
+func TestOptions_FrameCacheTag(t *testing.T) {
+	t.Parallel()
+	plain := Options{Plain: true}
+	framed := Options{Plain: true, Frame: true}
+	if plain.cacheTag() == framed.cacheTag() {
+		t.Errorf("frame must change the cache tag; both = %q", plain.cacheTag())
+	}
+	if !strings.Contains(framed.cacheTag(), "+frame") {
+		t.Errorf("frame cacheTag should contain +frame, got %q", framed.cacheTag())
+	}
+}

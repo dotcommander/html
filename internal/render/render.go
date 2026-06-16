@@ -74,6 +74,10 @@ type Options struct {
 	// and other non-Markdown input. Bypasses goldmark, the synthesized <h1>, and
 	// the TOC.
 	Plain bool
+	// Frame wraps plain/ANSI output in faux terminal-window chrome (title bar +
+	// traffic-light dots) for share-ready "screenshots". Only meaningful with
+	// Plain; the CLI's --frame implies plain rendering.
+	Frame bool
 	// Lang forces a chroma syntax-highlight language for plain mode ("" = auto-
 	// detect; "text"/"none"/"plain" = no highlighting / raw escaped text).
 	Lang string
@@ -102,6 +106,9 @@ func (o Options) cacheTag() string {
 	}
 	if o.Plain {
 		b.WriteString("+plain")
+	}
+	if o.Frame {
+		b.WriteString("+frame")
 	}
 	if o.Lang != "" {
 		appendCacheTag(&b, "lang", o.Lang)
