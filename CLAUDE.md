@@ -13,6 +13,7 @@ go build -o html ./cmd/html/ && ln -sf "$(pwd)/html" ~/go/bin/html   # install t
 html README.md            # render + open in browser, prints cache path
 html -n README.md         # --no-open: render only, don't launch browser
 html -f README.md         # --force: re-render even if cache is fresh
+html --safe untrusted.md   # disable raw-HTML passthrough (safe mode)
 
 tree -d | html            # pipe stdin: auto-detected as Markdown or plain text
 git diff | html -n        # plain (preformatted), auto-detected — no mangling
@@ -70,13 +71,13 @@ cmd/html/main.go            entrypoint (<20 lines), prints errors with "html:" p
 - **Freshness = `cacheMtime >= srcMtime`** in `cache.Fresh`; a missing cache file returns `false, nil` (not an error).
 - **Class-based syntax highlighting** — chroma is configured with `WithClasses(true)`, not inline styles, so themes are switchable via CSS. `page.go` generates CSS for both `github` (light) and `github-dark` themes; the dark CSS is wrapped in `@media (prefers-color-scheme: dark)` and the whole thing is memoized with `sync.OnceValue` (generated once per process).
 - **GFM enabled** via `extension.GFM` — bundles Tables, Strikethrough, TaskList, and Linkify together; to toggle one you must decompose GFM into its constituent extensions.
-- **Raw HTML passthrough** — `goldmarkhtml.WithUnsafe()` is intentionally on (local trusted input only; see comment at `render.go`). Do not point this tool at untrusted Markdown.
+- **Raw HTML passthrough** — enabled by default for local trusted input, but can be disabled with `--safe` (which builds goldmark without `goldmarkhtml.WithUnsafe()`, see comment at `render.go`). Do not point this tool at untrusted Markdown unless `--safe`.
 - **Title extraction** re-parses the source AST to find the first `<h1>`, collecting only `*ast.Text` children (inline HTML/emphasis inside the heading is dropped). This is a *second* parse — `md.Convert` already parsed once; the first AST is discarded.
 
 ### Gotchas
 
 - **Assets are compiled in** via `//go:embed` (`embed.go`). Editing `assets/base.css` or `assets/copy.js` requires a rebuild to take effect — no runtime override.
-- **`open` is macOS-only.** The browser-launch step does nothing useful on Linux/Windows; use `--no-open` there.
+- **Cross-platform launcher** — selected by `runtime.GOOS` (`open` on macOS, `start` on Windows, `xdg-open` with `open` fallback elsewhere); `open_command` config can override this selection.
 - **`goldmark-highlighting/v2` is pinned to a pseudo-version** (`v2.0.0-2023...`) — that commit is the only published version; treat it as frozen.
 - **Chroma theme names are hardcoded strings** (`styles.Get("github")` / `"github-dark"` in `page.go`). A `nil` from a renamed/missing style would panic in `WriteCSS`; revalidate these names when bumping chroma.
 - **Editing any embedded asset invalidates the cache.** `render.Fingerprint()` (`fingerprint.go`) hashes a schema version + every file in `assets/` + the generated highlight CSS; `cache.Fresh` compares it via a `<hash>.fp` sidecar, so changing `base.css`/`copy.js`/`theme.js`/`headings.js` forces a re-render even when the source mtime is unchanged. Bump `renderSchemaVersion` when changing renderer logic (e.g. `wrapPage` markup) that the asset bytes don't capture.

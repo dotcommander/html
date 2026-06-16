@@ -1,3 +1,5 @@
+**Status: all items below shipped as of 2026-06-16 (cache fingerprint, config file, TOC, ANSI/plain highlighting, safe raw-HTML mode, accessibility polish). Kept for provenance — not a live backlog.**
+
 Interpreting “spec all” as: write implementation-ready specs for every shortlisted idea. No code changes.
 
 **1. Cache Renderer Fingerprint**
