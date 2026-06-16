@@ -125,12 +125,17 @@ func TestReportCacheTagIncludesRenderedPlanFields(t *testing.T) {
 	typed := base
 	typed.Components = append([]report.Component(nil), base.Components...)
 	typed.Components[0].Type = report.ComponentCodeBlock
+	withSummary := base
+	withSummary.Components = append([]report.Component{
+		{Type: report.ComponentSummary, Source: "analysis", Title: "Summary", Options: map[string]string{}},
+	}, base.Components...)
 
 	require.NotEqual(t, reportCacheTag(base, Options{}), reportCacheTag(tabs, Options{}))
 	require.NotEqual(t, reportCacheTag(base, Options{}), reportCacheTag(slides, Options{}))
 	require.NotEqual(t, reportCacheTag(tabs, Options{}), reportCacheTag(slides, Options{}))
 	require.NotEqual(t, reportCacheTag(base, Options{}), reportCacheTag(titled, Options{}))
 	require.NotEqual(t, reportCacheTag(base, Options{}), reportCacheTag(typed, Options{}))
+	require.NotEqual(t, reportCacheTag(base, Options{}), reportCacheTag(withSummary, Options{}))
 }
 
 func readRenderedFile(t *testing.T, path string) string {

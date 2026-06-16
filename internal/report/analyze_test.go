@@ -745,6 +745,25 @@ func TestPlan_SlidesLayoutOverride(t *testing.T) {
 	}
 }
 
+func TestPlan_SourceCodeIncludesSummaryInAutoMode(t *testing.T) {
+	t.Parallel()
+
+	_, p := Plan(t.Context(), []byte("package main\n\nfunc main() {}\n"), Options{SourceName: "main.go", Planner: PlannerOff})
+
+	if p.Kind != KindSourceCode {
+		t.Fatalf("kind = %s, want %s", p.Kind, KindSourceCode)
+	}
+	if p.Mode != ModeCode {
+		t.Fatalf("mode = %s, want %s", p.Mode, ModeCode)
+	}
+	if len(p.Components) != 2 {
+		t.Fatalf("components = %#v, want summary and code", p.Components)
+	}
+	if p.Components[0].Type != ComponentSummary || p.Components[1].Type != ComponentCodeBlock {
+		t.Fatalf("components = %#v, want summary then code", p.Components)
+	}
+}
+
 func TestPlan_CodeOverrideAppliesToCSVRows(t *testing.T) {
 	t.Parallel()
 
@@ -763,6 +782,19 @@ func TestPlan_CodeOverrideAppliesToCSVRows(t *testing.T) {
 		if strings.Contains(reason, "deterministic plan invalid") {
 			t.Fatalf("plan should not fall back after code override: %v", p.Reasons)
 		}
+	}
+}
+
+func TestPlan_CodeOverrideKeepsSourceCodePure(t *testing.T) {
+	t.Parallel()
+
+	_, p := Plan(t.Context(), []byte("package main\n\nfunc main() {}\n"), Options{SourceName: "main.go", Mode: ModeOverrideCode, Planner: PlannerOff})
+
+	if p.Kind != KindSourceCode {
+		t.Fatalf("kind = %s, want %s", p.Kind, KindSourceCode)
+	}
+	if len(p.Components) != 1 || p.Components[0].Type != ComponentCodeBlock {
+		t.Fatalf("components = %#v, want code block only", p.Components)
 	}
 }
 

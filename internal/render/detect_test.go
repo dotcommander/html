@@ -35,13 +35,14 @@ func TestDetect(t *testing.T) {
 		// Robustness guards: ambiguous-but-weak cues stay plain.
 		{"changelog bullets only", "- fixed a bug\n- added a feature\n- removed cruft\n", KindPlain},
 		{"log hash line", "# starting server on :8080\nlistening\n", KindPlain},
-		{"lone heading + prose", "# Title\n\nsome ordinary prose paragraph here\n", KindPlain},
+		{"lone heading + prose", "# Title\n\nsome ordinary prose paragraph here\n", KindMarkdown},
 		{"link and emphasis only", "see [docs](http://x) and **bold** text here\n", KindPlain},
 		// Markdown — high-confidence structural signals.
 		{"readme with fence", "# Title\n\nText.\n\n```go\nfmt.Println()\n```\n", KindMarkdown},
 		{"tilde fence", "~~~\ncode block\n~~~\n", KindMarkdown},
 		{"gfm table", "| a | b |\n|---|---|\n| 1 | 2 |\n", KindMarkdown},
 		{"gfm task list", "- [x] ship renderer\n- [ ] verify screenshots\n", KindMarkdown},
+		{"atx heading", "# Title\n\nbody text\n", KindMarkdown},
 		{"setext equals", "Title\n=====\n\nbody text\n", KindMarkdown},
 		{"setext dash heading", "Title\n-----\n\nbody text\n", KindMarkdown},
 	}

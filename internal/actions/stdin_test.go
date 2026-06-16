@@ -73,6 +73,18 @@ func TestRun_StdinTaskListMarkdownByDetection(t *testing.T) {
 	}
 }
 
+func TestRun_StdinATXHeadingMarkdownByDetection(t *testing.T) {
+	t.Parallel()
+	content := "atx-heading-detect-uniq\n\n# Heading\n\nbody\n"
+	html := readRendered(t, pipeToHTML(t, content, Options{}))
+	if strings.Contains(html, "language-plaintext") {
+		t.Errorf("expected Markdown render, got plain wrapper")
+	}
+	if !strings.Contains(html, "<h1") {
+		t.Errorf("expected ATX heading rendered as <h1>")
+	}
+}
+
 func TestRun_StdinTitleInvalidatesContentCache(t *testing.T) {
 	t.Parallel()
 	content := "stdin-title-cache-uniq\nplain text\n"
