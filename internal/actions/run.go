@@ -38,6 +38,7 @@ type Options struct {
 	Safe     bool      // disable raw HTML passthrough (safe for untrusted Markdown)
 	Plain    bool      // force preformatted plain-text rendering
 	Markdown bool      // force Markdown rendering (overrides auto-detection)
+	Frame    bool      // --frame: wrap plain/ANSI output in terminal-window chrome (implies Plain)
 	Title    string    // page title for stdin input (file input uses the basename)
 	Lang     string    // force a syntax-highlight language for plain mode ("" = auto; "text" = raw)
 	OpenCmd  string    // launcher command (config open_command); "" = OS default
@@ -72,6 +73,9 @@ func Run(opts Options) (path string, err error) {
 }
 
 func RunWithResult(opts Options) (Result, error) {
+	if opts.Frame {
+		opts.Plain = true // --frame renders the body as plain text inside terminal chrome
+	}
 	if opts.Report || opts.Plan {
 		return runReport(opts)
 	}
@@ -391,6 +395,7 @@ func buildRenderOpts(opts Options, fallbackTitle, sourceName string, plain bool)
 		Theme:         opts.Theme,
 		TOC:           opts.TOC,
 		Plain:         plain,
+		Frame:         opts.Frame,
 	}
 }
 
