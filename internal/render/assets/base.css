@@ -216,6 +216,169 @@ body::before {
   border-radius: 4px;
 }
 
+/* ── Report components ───────────────────────────────────────────────────── */
+.report-section {
+  margin: 1.75rem 0;
+}
+
+.report-summary {
+  margin: 0 0 1.5rem;
+  padding: 1rem;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 0.94rem;
+}
+
+.report-summary dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.report-summary dt {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.report-summary dd {
+  margin: 0.15rem 0 0;
+  font-weight: 700;
+}
+
+.report-summary p {
+  margin: 0.9rem 0 0;
+  color: var(--muted);
+}
+
+.report-table-wrap {
+  overflow-x: auto;
+}
+
+.report-filter {
+  width: 100%;
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.65rem;
+  color: var(--text);
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: 0.95rem ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.report-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 0.9rem;
+}
+
+.report-table th,
+.report-table td {
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.report-table th {
+  background: var(--panel-bg);
+}
+
+.report-table th button {
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.record-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: 0.8rem;
+}
+
+.record-card {
+  padding: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-bg);
+}
+
+.record-card h3 {
+  margin-top: 0;
+  font-size: 1rem;
+}
+
+.record-card dl,
+.record-card div {
+  margin: 0;
+}
+
+.record-card div {
+  padding: 0.35rem 0;
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.record-card dt {
+  color: var(--muted);
+  font: 700 0.72rem ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  text-transform: uppercase;
+}
+
+.record-card dd {
+  margin: 0.1rem 0 0;
+}
+
+.diff-view .add { color: var(--success); }
+.diff-view .del { color: #b42318; }
+.diff-view .hunk,
+.diff-view .file { color: var(--accent); font-weight: 700; }
+
+:root[data-theme="dark"] .diff-view .del { color: #ff9b91; }
+
+.file-tree {
+  padding-left: 0;
+  list-style: none;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 0.92rem;
+}
+
+.file-tree li {
+  margin: 0.1rem 0;
+  padding-left: calc(var(--depth, 0) * 1.1rem);
+}
+
+.report-tab-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.report-tab-list button {
+  padding: 0.45rem 0.65rem;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  font: 700 0.9rem ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  cursor: pointer;
+}
+
+.report-tab-list button[aria-selected="true"] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 /* ── Links ────────────────────────────────────────────────────────────────── */
 .markdown-body a {
   color: var(--link);
@@ -372,11 +535,6 @@ body::before {
   opacity: 1;
 }
 
-@media print {
-  .theme-toggle {
-    display: none;
-  }
-}
 
 /* ── Tables ───────────────────────────────────────────────────────────────── */
 .markdown-body table {
@@ -509,23 +667,41 @@ body::before {
 
 /* ── Print ────────────────────────────────────────────────────────────────── */
 @media print {
+  :root[data-theme="dark"] {
+    --bg:       #f7f5ef;
+    --paper:    #fffdf8;
+    --text:     #27231f;
+    --muted:    #6f685f;
+    --link:     #0b5cad;
+    --border:   #ddd6c9;
+    --rule:     #c8bba8;
+    --code-bg:  #f0ece4;
+    --panel-bg: #f8f3ea;
+    --accent:   #9f5b2d;
+    --success:  #24764b;
+    --shadow:   0 1.5rem 4rem rgba(48, 39, 27, 0.08);
+  }
+
+  body { background: var(--bg); color: var(--text); }
+
+  .theme-toggle,
   .copy-btn {
-    display: none;
+    display: none !important;
   }
 
   .markdown-body {
     max-width: none;
-    padding: 0;
-    border: 0;
-    box-shadow: none;
   }
 
-  body {
-    background: #fff;
-    color: #000;
+  pre,
+  blockquote,
+  table,
+  img {
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
 
-  .markdown-body a {
-    color: #000;
+  @page {
+    margin: 1.5cm;
   }
 }
