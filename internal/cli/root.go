@@ -126,7 +126,7 @@ func newRootCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&plan, "plan", false, "print the report plan JSON without rendering")
 	cmd.Flags().BoolVar(&stdout, "stdout", false, "write the final HTML document to stdout without opening")
 	cmd.Flags().Var((*modeValue)(&mode), "mode", "report mode: auto, article, table, cards, diff, log, code, tree")
-	cmd.Flags().Var((*layoutValue)(&layout), "layout", "report layout: auto, single, tabs")
+	cmd.Flags().Var((*layoutValue)(&layout), "layout", "report layout: auto, single, tabs, slides")
 	cmd.Flags().Var((*plannerValue)(&planner), "planner", "planner policy: off, auto, llm")
 	cmd.Flags().StringVar(&llmURL, "llm-url", reportDefaults.LLMURL, "OpenAI-compatible chat completions URL for the optional planner")
 	cmd.Flags().StringVar(&llmModel, "llm-model", reportDefaults.LLMModel, "model name for the optional planner")
@@ -180,7 +180,7 @@ func (v *layoutValue) Type() string   { return "layout" }
 func (v *layoutValue) Set(s string) error {
 	l := report.LayoutOverride(s)
 	switch l {
-	case report.LayoutOverrideAuto, report.LayoutOverrideSingle, report.LayoutOverrideTabs:
+	case report.LayoutOverrideAuto, report.LayoutOverrideSingle, report.LayoutOverrideTabs, report.LayoutOverrideSlides:
 		*v = layoutValue(l)
 		return nil
 	default:

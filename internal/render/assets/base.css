@@ -72,6 +72,8 @@ body::before {
 
 /* ── Content container ────────────────────────────────────────────────────── */
 .markdown-body {
+  box-sizing: border-box;
+  width: min(calc(100% - 2rem), 46rem);
   max-width: 46rem;
   margin: clamp(2rem, 6vw, 4.5rem) auto;
   padding: clamp(1.5rem, 4vw, 3.75rem);
@@ -596,10 +598,82 @@ body::before {
 /* Narrow viewports: wide tables scroll horizontally instead of forcing the
    whole page wider than the screen. */
 @media (max-width: 45rem) {
+  .markdown-body {
+    width: 100%;
+    margin: 0;
+    padding: 1.25rem;
+    border-left: 0;
+    border-right: 0;
+    border-radius: 0;
+  }
+
+  .markdown-body h1 {
+    font-size: clamp(1.85rem, 8vw, 2.2rem);
+  }
+
   .markdown-body table {
     display: block;
+    max-width: 100%;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+  }
+
+  .report-table-wrap {
+    overflow-x: visible;
+  }
+
+  .report-table {
+    display: block;
+  }
+
+  .report-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .report-table tbody,
+  .report-table tr,
+  .report-table td {
+    display: block;
+  }
+
+  .report-table tbody {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .report-table tr {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--paper);
+    overflow: hidden;
+  }
+
+  .report-table td {
+    border: 0;
+    border-top: 1px solid var(--border);
+    overflow-wrap: anywhere;
+  }
+
+  .report-table td:first-child {
+    border-top: 0;
+  }
+
+  .report-table td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.15rem;
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
   }
 }
 

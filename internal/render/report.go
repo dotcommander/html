@@ -195,7 +195,11 @@ func dataTable(src []byte, analysis report.Analysis) string {
 	for _, row := range rows {
 		b.WriteString(`<tr>`)
 		for i := range headers {
-			b.WriteString(`<td>`)
+			label := ""
+			if i < len(labels) {
+				label = labels[i]
+			}
+			fmt.Fprintf(&b, `<td data-label="%s">`, escapeTableText(label))
 			if i < len(row) {
 				b.WriteString(escapeTableText(row[i]))
 			}
@@ -225,12 +229,13 @@ func recordCards(src []byte, analysis report.Analysis) string {
 	for i, row := range rows {
 		fmt.Fprintf(&b, `<article class="record-card"><h3>Record %d</h3><dl>`, i+1)
 		for j, label := range labels {
+			if j >= len(row) || strings.TrimSpace(cleanTableText(row[j])) == "" {
+				continue
+			}
 			b.WriteString(`<div><dt>`)
 			b.WriteString(escapeTableText(label))
 			b.WriteString(`</dt><dd>`)
-			if j < len(row) {
-				b.WriteString(escapeTableText(row[j]))
-			}
+			b.WriteString(escapeTableText(row[j]))
 			b.WriteString(`</dd></div>`)
 		}
 		b.WriteString(`</dl></article>`)

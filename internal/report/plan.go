@@ -74,6 +74,8 @@ func deterministicPlan(a Analysis, opts Options) ReportPlan {
 		layout = LayoutSinglePage
 	case LayoutOverrideTabs:
 		layout = LayoutTabbedPage
+	case LayoutOverrideSlides:
+		layout = LayoutSlides
 	}
 	return ReportPlan{
 		Version:    PlanVersion,

@@ -35,6 +35,7 @@ type Layout string
 const (
 	LayoutSinglePage Layout = "single-page"
 	LayoutTabbedPage Layout = "tabbed-page"
+	LayoutSlides     Layout = "slides-page"
 )
 
 type Mode string
@@ -125,6 +126,7 @@ const (
 	LayoutOverrideAuto   LayoutOverride = "auto"
 	LayoutOverrideSingle LayoutOverride = "single"
 	LayoutOverrideTabs   LayoutOverride = "tabs"
+	LayoutOverrideSlides LayoutOverride = "slides"
 )
 
 type PlannerMode string
@@ -222,7 +224,7 @@ func validKind(v Kind) bool {
 }
 
 func validLayout(v Layout) bool {
-	return v == LayoutSinglePage || v == LayoutTabbedPage
+	return v == LayoutSinglePage || v == LayoutTabbedPage || v == LayoutSlides
 }
 
 func validMode(v Mode) bool {
