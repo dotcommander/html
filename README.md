@@ -27,6 +27,7 @@ tree -d | html            # pipe any command output — auto-detected
 html README.md            # Markdown file → GitHub-style page, opened in the browser
 tree -d | html            # pipe stdin: auto-detected as Markdown or plain text
 git diff --color | html   # ANSI colors preserved as styled spans — diffs stay colored
+git diff --color | html --frame   # wrap it in a faux terminal window — a share-ready "screenshot"
 cat main.go | html        # plain code is auto syntax-highlighted (language detected)
 html data.json            # files highlight by extension (.go / .json / .py / …)
 ```
@@ -44,6 +45,7 @@ Every output is a single self-contained `.html` file — open it offline, no net
 | `-m`, `--markdown` | force Markdown (override stdin auto-detection) |
 | `-t`, `--title <text>` | page title for piped input (default `stdin`) |
 | `-l`, `--lang <lang>` | syntax-highlight language for plain mode (`go`, `json`; `text` = none) |
+| `--frame` | wrap plain/ANSI output in a terminal-window frame, implies `--plain` (share-ready "screenshot") |
 | `--safe` | disable raw-HTML passthrough — use for untrusted Markdown |
 
 Run `html --help` for the full list, including the report-mode flags (`--mode`, `--layout`).
