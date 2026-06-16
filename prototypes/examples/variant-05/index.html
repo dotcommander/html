@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="generator" content="prototype-skill">
+  <title>Variant 05 - Review Desk</title>
+  <link rel="stylesheet" href="../../assets/prototype.css">
+</head>
+<body class="prototype v5">
+  <a class="back" href="../../index.html">Back to gallery</a>
+  <main class="doc-shell">
+    <div class="eyebrow">Variant 05 / Review Desk</div>
+    <h1 class="doc-title">Findings-first generated reports</h1>
+    <p class="lead">A surface for code-review notes, regression hunts, and deterministic verification ledgers. This is less literary and more operational.</p>
+    <section class="review-board">
+      <article class="finding">
+        <div class="meta-label">High signal finding</div>
+        <h2>Dark highlight selectors must match emitted Chroma classes</h2>
+        <p>Goldmark emits <code>class="chroma light"</code>. A dark theme that scopes only <code>.chroma.dark</code> leaves token colors stale.</p>
+      </article>
+      <article class="finding">
+        <div class="meta-label">Missing test class</div>
+        <h2>Visual CSS contracts need browser evidence</h2>
+        <p>Unit tests can assert emitted selectors, but viewport checks catch overflow, contrast, and table behavior.</p>
+      </article>
+    </section>
+    <h2>Verification ledger</h2>
+    <div class="table-box">
+      <table class="data">
+        <tr><th>Check</th><th>Evidence</th><th>Status</th></tr>
+        <tr><td>Source tests</td><td><code>go test ./...</code></td><td>required</td></tr>
+        <tr><td>Static analysis</td><td><code>go vet ./...</code></td><td>required</td></tr>
+        <tr><td>Browser view</td><td>desktop and mobile screenshots</td><td>required for visual changes</td></tr>
+      </table>
+    </div>
+  </main>
+</body>
+</html>
+

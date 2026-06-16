@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="generator" content="prototype-skill">
+  <title>Variant 03 - Field Notebook</title>
+  <link rel="stylesheet" href="../../assets/prototype.css">
+</head>
+<body class="prototype v3">
+  <a class="back" href="../../index.html">Back to gallery</a>
+  <main class="doc-shell">
+    <div class="eyebrow">Variant 03 / Field Notebook</div>
+    <h1 class="doc-title">A traced render observation</h1>
+    <p class="lead">This direction treats generated HTML as a durable note: source evidence in the main column, implementation reminders in the margin.</p>
+    <section class="notebook">
+      <article class="article">
+        <h2>Observation</h2>
+        <p>The native semantic space is Markdown plus trusted local HTML. The rendered artifact is a single offline page, so every component must survive file URL loading and cache reuse.</p>
+        <h2>Transform</h2>
+        <p><code>actions.Run</code> validates the source, decides freshness, limits reads, and delegates to <code>render.Render</code>. The resulting file is atomically written before the opener sees it.</p>
+        <blockquote class="panel">Design implication: widgets must be CSS and inline-script friendly. No external sprite sheets, no CDN fonts, no build-time hydration assumptions.</blockquote>
+        <h2>Sample command</h2>
+        <div class="code"><pre>html -n goals.md
+html -f goals.md
+html --safe downloaded.md</pre></div>
+      </article>
+      <aside class="margin-notes">
+        <div class="note"><div class="meta-label">Invariant</div><p>One self-contained HTML document.</p></div>
+        <div class="note"><div class="meta-label">Widget fit</div><p>Margin notes, small ledgers, and source cards are useful for long debugging writeups.</p></div>
+        <div class="note"><div class="meta-label">Avoid</div><p>Heavy dashboard chrome on ordinary prose.</p></div>
+        <div class="note"><div class="meta-label">Best for</div><p>Proof notes, architecture tracing, release investigation, and local research logs.</p></div>
+      </aside>
+    </section>
+  </main>
+</body>
+</html>
+

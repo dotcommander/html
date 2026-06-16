@@ -1,0 +1,588 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+:root {
+  color-scheme: light;
+  --ink: #25231f;
+  --muted: #6c675d;
+  --paper: #fffdf8;
+  --line: #ddd5c8;
+  --soft: #f4efe6;
+  --accent: #9f5b2d;
+  --blue: #1664b5;
+  --green: #24724b;
+  --red: #a23a31;
+  --shadow: 0 24px 70px rgba(41, 35, 26, 0.11);
+  font-family: ui-serif, Georgia, Cambria, "Times New Roman", serif;
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  background: var(--bg, #f7f4ed);
+  line-height: 1.55;
+}
+
+a {
+  color: inherit;
+}
+
+code,
+kbd,
+.mono {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+.selector {
+  min-height: 100vh;
+  padding: 42px clamp(18px, 4vw, 64px);
+  background:
+    linear-gradient(90deg, rgba(36, 31, 23, 0.04) 1px, transparent 1px),
+    linear-gradient(180deg, #f8f4ec, #ece5d8);
+  background-size: 52px 52px, auto;
+}
+
+.selector-shell {
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.selector header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 28px;
+  align-items: end;
+  padding-bottom: 26px;
+  border-bottom: 1px solid rgba(37, 35, 31, 0.18);
+}
+
+.eyebrow,
+.meta-label,
+.badge,
+.toc-label {
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.selector h1 {
+  max-width: 760px;
+  margin: 8px 0 0;
+  font-size: clamp(40px, 7vw, 82px);
+  line-height: 0.96;
+  letter-spacing: 0;
+}
+
+.selector .summary {
+  max-width: 470px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 17px;
+}
+
+.variant-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 30px;
+}
+
+.variant-card {
+  min-height: 310px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 20px;
+  color: var(--card-ink, var(--ink));
+  background: var(--card-bg, var(--paper));
+  border: 1px solid var(--card-line, var(--line));
+  border-radius: 8px;
+  box-shadow: 0 14px 38px rgba(41, 35, 26, 0.08);
+  text-decoration: none;
+}
+
+.variant-card h2 {
+  margin: 12px 0 8px;
+  font-size: 28px;
+  line-height: 1.05;
+  letter-spacing: 0;
+}
+
+.variant-card p {
+  margin: 0;
+  color: color-mix(in srgb, var(--card-ink, var(--ink)) 72%, transparent);
+}
+
+.mini-bars,
+.mini-table,
+.mini-doc,
+.mini-board,
+.mini-command,
+.mini-map {
+  height: 96px;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  opacity: 0.72;
+}
+
+.mini-bars {
+  background:
+    linear-gradient(90deg, currentColor 0 18%, transparent 18% 24%, currentColor 24% 52%, transparent 52% 59%, currentColor 59% 82%, transparent 82%),
+    linear-gradient(0deg, transparent 0 38%, currentColor 38% 42%, transparent 42% 61%, currentColor 61% 65%, transparent 65%);
+}
+
+.mini-table {
+  background:
+    linear-gradient(currentColor 0 1px, transparent 1px 33%, currentColor 33% calc(33% + 1px), transparent calc(33% + 1px) 66%, currentColor 66% calc(66% + 1px), transparent calc(66% + 1px)),
+    linear-gradient(90deg, currentColor 0 1px, transparent 1px 36%, currentColor 36% calc(36% + 1px), transparent calc(36% + 1px) 70%, currentColor 70% calc(70% + 1px), transparent calc(70% + 1px));
+}
+
+.mini-doc {
+  background:
+    linear-gradient(currentColor 0 10px, transparent 10px 20px, currentColor 20px 25px, transparent 25px 38px, currentColor 38px 43px, transparent 43px),
+    linear-gradient(90deg, transparent 0 70%, currentColor 70% 72%, transparent 72%);
+}
+
+.mini-board {
+  background:
+    linear-gradient(90deg, transparent 0 33%, currentColor 33% calc(33% + 1px), transparent calc(33% + 1px) 66%, currentColor 66% calc(66% + 1px), transparent calc(66% + 1px)),
+    linear-gradient(currentColor 0 18px, transparent 18px);
+}
+
+.mini-command {
+  background:
+    radial-gradient(circle at 12px 18px, currentColor 0 4px, transparent 5px),
+    linear-gradient(currentColor 0 8px, transparent 8px 20px, currentColor 20px 28px, transparent 28px 42px, currentColor 42px 50px, transparent 50px);
+  background-size: 100% 100%, 74% 100%;
+  background-position: 0 0, 42px 18px;
+  background-repeat: no-repeat;
+}
+
+.mini-map {
+  background:
+    linear-gradient(135deg, transparent 0 23%, currentColor 23% 24%, transparent 24% 48%, currentColor 48% 49%, transparent 49%),
+    radial-gradient(circle at 23% 34%, currentColor 0 6px, transparent 7px),
+    radial-gradient(circle at 74% 62%, currentColor 0 6px, transparent 7px);
+}
+
+.ledger {
+  width: 100%;
+  margin-top: 32px;
+  border-collapse: collapse;
+  background: rgba(255, 253, 248, 0.72);
+  border: 1px solid rgba(37, 35, 31, 0.16);
+}
+
+.ledger th,
+.ledger td {
+  padding: 10px 12px;
+  border: 1px solid rgba(37, 35, 31, 0.12);
+  text-align: left;
+  vertical-align: top;
+  font-size: 14px;
+}
+
+.ledger th {
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.prototype {
+  min-height: 100vh;
+  padding: var(--page-pad, 30px);
+}
+
+.back {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 10;
+  padding: 7px 10px;
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13px;
+  color: var(--back-ink, var(--ink));
+  background: var(--back-bg, rgba(255, 255, 255, 0.82));
+  border: 1px solid var(--back-line, rgba(0, 0, 0, 0.14));
+  border-radius: 6px;
+  text-decoration: none;
+}
+
+.doc-shell {
+  max-width: var(--shell, 1120px);
+  margin: 0 auto;
+}
+
+.doc-title {
+  margin: 0;
+  font-size: clamp(42px, 7vw, 76px);
+  line-height: 0.98;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+.lead {
+  max-width: 650px;
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-size: 18px;
+}
+
+.panel,
+.article,
+.card,
+.toc,
+.code,
+.table-box {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.panel,
+.card,
+.toc,
+.table-box {
+  padding: 16px;
+}
+
+.badge-row,
+.toolbar,
+.tabs,
+.status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.badge,
+.pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--muted);
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.pill strong {
+  color: var(--ink);
+}
+
+.code {
+  overflow: hidden;
+  background: var(--code-bg, #141922);
+  color: var(--code-ink, #dce7f5);
+}
+
+.code pre {
+  margin: 0;
+  padding: 16px;
+  overflow: auto;
+}
+
+.table-box {
+  overflow-x: auto;
+}
+
+table.data {
+  width: 100%;
+  min-width: 660px;
+  border-collapse: collapse;
+}
+
+.data th,
+.data td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.data th {
+  color: var(--muted);
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 12px;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.metric {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+}
+
+.metric b {
+  display: block;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.metric span {
+  color: var(--muted);
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 12px;
+}
+
+.v1 {
+  --bg: #f4efe6;
+  --paper: #fffdf8;
+  --line: #d9cfbf;
+  --soft: #f4eadc;
+  --accent: #9f5b2d;
+}
+
+.v1 .doc-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 28px;
+}
+
+.v1 .article {
+  padding: clamp(24px, 5vw, 56px);
+  box-shadow: var(--shadow);
+}
+
+.v1 .toc {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+}
+
+.v1 h2::before {
+  content: "";
+  display: block;
+  width: 42px;
+  height: 3px;
+  margin-bottom: 9px;
+  background: var(--accent);
+}
+
+.v2 {
+  --bg: #10151c;
+  --paper: #151c25;
+  --ink: #e8edf4;
+  --muted: #95a3b6;
+  --line: #2d3847;
+  --soft: #1e2936;
+  --accent: #67b7ff;
+  --code-bg: #0b1017;
+  --code-ink: #e9f1fb;
+  --back-bg: #151c25;
+  --back-ink: #e8edf4;
+  --back-line: #2d3847;
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.v2 .doc-shell {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 18px;
+}
+
+.v2 .sidebar {
+  position: sticky;
+  top: 28px;
+  align-self: start;
+}
+
+.v2 .article {
+  padding: 24px;
+}
+
+.v2 .terminal-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.v3 {
+  --bg: #f0ece2;
+  --paper: #fbf6e9;
+  --line: #cfc5b0;
+  --soft: #eee4d1;
+  --accent: #3e6a58;
+}
+
+.v3 .doc-shell {
+  max-width: 1180px;
+}
+
+.v3 .notebook {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 0;
+  margin-top: 22px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--paper);
+}
+
+.v3 .article {
+  border: 0;
+  border-right: 1px solid var(--line);
+  border-radius: 0;
+  padding: clamp(22px, 4vw, 44px);
+}
+
+.v3 .margin-notes {
+  padding: 22px;
+  background: var(--soft);
+}
+
+.note {
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.v4 {
+  --bg: #eef2f7;
+  --paper: #ffffff;
+  --line: #d3dbe6;
+  --soft: #f5f8fc;
+  --accent: #285f9f;
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.v4 .docs-frame {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr) 270px;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.v4 .article {
+  padding: 28px;
+}
+
+.v4 .rail {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+}
+
+.v5 {
+  --bg: #f6f6f3;
+  --paper: #ffffff;
+  --line: #d6d6ce;
+  --soft: #efefe8;
+  --accent: #7a4637;
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.v5 .review-board {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 22px;
+}
+
+.finding {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--accent);
+  border-radius: 8px;
+  background: var(--paper);
+}
+
+.v6 {
+  --bg: #15130f;
+  --paper: #f5eee1;
+  --ink: #211d17;
+  --muted: #6f6252;
+  --line: #d6c6ad;
+  --soft: #eadcc4;
+  --accent: #bd6235;
+}
+
+.v6 .stage {
+  min-height: calc(100vh - 60px);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 24px;
+  padding: clamp(22px, 5vw, 56px);
+  background:
+    linear-gradient(90deg, rgba(189, 98, 53, 0.12) 1px, transparent 1px),
+    var(--paper);
+  background-size: 46px 46px;
+  border-radius: 8px;
+}
+
+.v6 .hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 28px;
+  align-items: start;
+}
+
+.v6 .doc-title {
+  font-size: clamp(50px, 10vw, 112px);
+}
+
+.flow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (max-width: 920px) {
+  .selector header,
+  .v1 .doc-shell,
+  .v2 .doc-shell,
+  .v2 .terminal-grid,
+  .v3 .notebook,
+  .v4 .docs-frame,
+  .v5 .review-board,
+  .v6 .hero-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .variant-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .v1 .toc,
+  .v2 .sidebar,
+  .v4 .rail {
+    position: static;
+  }
+
+  .metric-grid,
+  .flow {
+    grid-template-columns: 1fr;
+  }
+
+  .prototype {
+    padding: 12px;
+  }
+
+  .back {
+    position: static;
+    display: inline-flex;
+    margin-bottom: 12px;
+  }
+}

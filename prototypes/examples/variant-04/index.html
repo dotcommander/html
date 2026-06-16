@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="generator" content="prototype-skill">
+  <title>Variant 04 - API Manual</title>
+  <link rel="stylesheet" href="../../assets/prototype.css">
+</head>
+<body class="prototype v4">
+  <a class="back" href="../../index.html">Back to gallery</a>
+  <main class="doc-shell">
+    <div class="eyebrow">Variant 04 / API Manual</div>
+    <h1 class="doc-title">Configuration and renderer options</h1>
+    <p class="lead">A documentation-app surface for command manuals, config references, and package contracts.</p>
+    <section class="docs-frame">
+      <nav class="panel rail">
+        <div class="toc-label">Sections</div>
+        <p>Config file</p>
+        <p>Renderer options</p>
+        <p>Cache behavior</p>
+        <p>Open command</p>
+      </nav>
+      <article class="article">
+        <h2>Config file</h2>
+        <p><code>~/.config/html/config.json</code> is optional. Missing file preserves current behavior; malformed JSON fails the command with a clear config error.</p>
+        <div class="code"><pre>{
+  "open_command": "firefox",
+  "max_width": "60rem",
+  "default_theme": "dark",
+  "toc": true
+}</pre></div>
+        <h2>Renderer options</h2>
+        <div class="table-box">
+          <table class="data">
+            <tr><th>Option</th><th>Effect</th><th>Fingerprint?</th></tr>
+            <tr><td>max_width</td><td>reader column CSS override</td><td>yes</td></tr>
+            <tr><td>default_theme</td><td>pre-paint theme fallback</td><td>yes</td></tr>
+            <tr><td>toc</td><td>automatic or forced table of contents</td><td>yes</td></tr>
+            <tr><td>open_command</td><td>browser launcher only</td><td>no</td></tr>
+          </table>
+        </div>
+      </article>
+      <aside class="panel rail">
+        <div class="meta-label">Reference card</div>
+        <p><strong>Boundary:</strong> config is loaded at CLI edge and threaded into render/open options.</p>
+        <p><strong>Invalidation:</strong> output-affecting fields participate in the cache tag.</p>
+      </aside>
+    </section>
+  </main>
+</body>
+</html>
+

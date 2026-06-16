@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="generator" content="prototype-skill">
+  <title>Variant 02 - Ops Console</title>
+  <link rel="stylesheet" href="../../assets/prototype.css">
+</head>
+<body class="prototype v2">
+  <a class="back" href="../../index.html">Back to gallery</a>
+  <main class="doc-shell">
+    <aside class="panel sidebar">
+      <div class="eyebrow">html status</div>
+      <h2>Render run</h2>
+      <div class="status-row"><span class="pill"><strong>fresh</strong></span><span class="pill">32 MiB cap</span></div>
+      <p class="lead">A dense shell for generated command logs and verification notes.</p>
+    </aside>
+    <section class="article">
+      <div class="eyebrow">Variant 02 / Ops Console</div>
+      <h1 class="doc-title">Markdown render pipeline</h1>
+      <div class="terminal-grid">
+        <div class="code"><pre>cmd/html/main.go
+  internal/cli/root.go
+    internal/actions/run.go
+      internal/cache/cache.go
+      internal/render/render.go</pre></div>
+        <div class="metric-grid">
+          <div class="metric"><b>1</b><span>Cobra command</span></div>
+          <div class="metric"><b>4</b><span>embedded assets</span></div>
+          <div class="metric"><b>0</b><span>network calls</span></div>
+        </div>
+      </div>
+      <h2>Operator widgets</h2>
+      <div class="badge-row">
+        <span class="pill">cache: ~/.config/html/cache</span>
+        <span class="pill">theme: auto</span>
+        <span class="pill">toc: 4+ headings</span>
+        <span class="pill">safe mode: optional</span>
+      </div>
+      <h2>Verification output</h2>
+      <div class="table-box">
+        <table class="data">
+          <tr><th>Command</th><th>Expected signal</th><th>Surface</th></tr>
+          <tr><td><code>go test ./...</code></td><td>render, cache, config pass</td><td>source correctness</td></tr>
+          <tr><td><code>html -n -f fixture.md</code></td><td>cache path printed</td><td>runtime contract</td></tr>
+          <tr><td>browser smoke</td><td>no overflow, no console errors</td><td>visible page</td></tr>
+        </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
+

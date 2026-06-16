@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="generator" content="prototype-skill">
+  <title>Variant 01 - Reader Sheet</title>
+  <link rel="stylesheet" href="../../assets/prototype.css">
+</head>
+<body class="prototype v1">
+  <a class="back" href="../../index.html">Back to gallery</a>
+  <main class="doc-shell">
+    <article class="article">
+      <div class="eyebrow">Variant 01 / Reader Sheet</div>
+      <h1 class="doc-title">Renderer fingerprint and cache freshness</h1>
+      <p class="lead">A quiet default for local Markdown: rich enough for long documents, still self-contained, and focused on reading before controls.</p>
+      <p>The page keeps the CLI contract visible without turning every document into an app. Headings get stable anchors, long inline code wraps, and code blocks keep a fixed copy target.</p>
+      <h2>Rendered artifacts</h2>
+      <p><code>render.Fingerprint()</code> combines the schema version, embedded assets, generated highlight CSS, and output-affecting options. That makes style changes invalidate stale cache entries even when the Markdown file has not changed.</p>
+      <div class="code"><pre>html -n -f notes.md
+/Users/vampire/.config/html/cache/&lt;sha256&gt;.html</pre></div>
+      <h2>Behavior table</h2>
+      <div class="table-box">
+        <table class="data">
+          <tr><th>Value</th><th>Produced by</th><th>Consumed by</th><th>Invalidates when</th></tr>
+          <tr><td>cache key</td><td>absolute symlink-resolved path</td><td>cache.PathFor</td><td>source path target changes</td></tr>
+          <tr><td>fingerprint</td><td>render assets + options</td><td>cache.Fresh</td><td>CSS, JS, schema, Chroma output changes</td></tr>
+          <tr><td>HTML page</td><td>render.Render</td><td>browser open command</td><td>source mtime or fingerprint changes</td></tr>
+        </table>
+      </div>
+    </article>
+    <aside class="toc">
+      <div class="toc-label">Contents</div>
+      <p><a href="#rendered-artifacts">Rendered artifacts</a></p>
+      <p><a href="#behavior-table">Behavior table</a></p>
+      <p><a href="#copy-buttons">Copy buttons</a></p>
+      <div class="badge-row"><span class="pill">TOC</span><span class="pill">Copy</span><span class="pill">Theme</span></div>
+    </aside>
+  </main>
+</body>
+</html>
+
