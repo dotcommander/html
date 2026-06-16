@@ -311,3 +311,39 @@ func TestRoot_OutputToStdout(t *testing.T) {
 		t.Fatalf("expected HTML on stdout, got %q", out.String())
 	}
 }
+
+func TestRoot_FrameMarkdownMutuallyExclusive(t *testing.T) {
+	t.Parallel()
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"--frame", "--markdown", "-n"})
+	cmd.SetIn(strings.NewReader("hello"))
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("expected --frame/--markdown mutual-exclusion error")
+	}
+	if !strings.Contains(err.Error(), "--frame and --markdown are mutually exclusive") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRoot_FrameWrapsPlainOutput(t *testing.T) {
+	t.Parallel()
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"--frame", "--stdout"})
+	cmd.SetIn(strings.NewReader("plain frame line\n"))
+	out := &bytes.Buffer{}
+	cmd.SetOut(out)
+	cmd.SetErr(&bytes.Buffer{})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	got := out.String()
+	if !strings.Contains(got, `class="term-frame"`) {
+		t.Fatalf("--frame must wrap output in a terminal-window frame, got:\n%s", got)
+	}
+	if !strings.Contains(got, "plain frame line") {
+		t.Fatalf("--frame must preserve the body content, got:\n%s", got)
+	}
+}

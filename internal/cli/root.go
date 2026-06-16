@@ -14,7 +14,7 @@ import (
 func Execute() error { return newRootCmd().Execute() }
 
 func newRootCmd() *cobra.Command {
-	var noOpen, force, safe, plain, markdown bool
+	var noOpen, force, safe, plain, markdown, frame bool
 	var plan, stdout bool
 	var title, lang, output string
 	reportDefaults := report.DefaultOptions()
@@ -37,6 +37,9 @@ func newRootCmd() *cobra.Command {
 			if plain && markdown {
 				return fmt.Errorf("--plain and --markdown are mutually exclusive")
 			}
+			if frame && markdown {
+				return fmt.Errorf("--frame and --markdown are mutually exclusive")
+			}
 			reportRequested := plan ||
 				cmd.Flags().Changed("mode") ||
 				cmd.Flags().Changed("layout") ||
@@ -49,6 +52,9 @@ func newRootCmd() *cobra.Command {
 			}
 			if markdown && reportRequested {
 				return fmt.Errorf("--markdown and report flags are mutually exclusive")
+			}
+			if frame && reportRequested {
+				return fmt.Errorf("--frame and report flags are mutually exclusive")
 			}
 			if plan && output != "" {
 				return fmt.Errorf("--plan and --output are mutually exclusive")
@@ -72,6 +78,7 @@ func newRootCmd() *cobra.Command {
 				Safe:       safe,
 				Plain:      plain,
 				Markdown:   markdown,
+				Frame:      frame,
 				Title:      title,
 				Lang:       lang,
 				OpenCmd:    cfg.OpenCommand,
@@ -112,6 +119,7 @@ func newRootCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&safe, "safe", false, "disable raw HTML passthrough (safe for untrusted Markdown)")
 	cmd.Flags().BoolVarP(&plain, "plain", "p", false, "render input as preformatted plain text, not Markdown")
 	cmd.Flags().BoolVarP(&markdown, "markdown", "m", false, "render input as Markdown (overrides stdin auto-detection)")
+	cmd.Flags().BoolVar(&frame, "frame", false, "wrap plain/ANSI output in a terminal-window frame (implies --plain)")
 	cmd.Flags().StringVarP(&title, "title", "t", "stdin", "page title for piped input")
 	cmd.Flags().StringVarP(&lang, "lang", "l", "", "syntax-highlight language for plain mode (e.g. go, json; \"text\" = no highlighting)")
 	cmd.Flags().StringVarP(&output, "output", "o", "", "write the final HTML document to a stable path (\"-\" writes stdout)")
