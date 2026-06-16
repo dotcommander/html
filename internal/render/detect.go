@@ -28,14 +28,15 @@ const (
 // Detect classifies src as binary, Markdown, or plain text. Precedence:
 //  1. binary (a NUL byte, or >maxControlRatio non-text bytes in the scan window);
 //  2. Markdown — but ONLY on a high-confidence structural signal (fenced code,
-//     a GFM table, a GFM task list, or a setext heading);
+//     a GFM table, a GFM task list, a setext heading, or an ATX heading
+//     followed by a blank/EOF);
 //  3. plain text (the default).
 //
 // Markdown detection is deliberately strong-signal-only. Every weaker inline cue
 // (a "# comment" line, "__dunder__", `command` backticks, "arr[i](x)" reading as
 // a link) has a common code/config/log doppelgänger, so relying on them would
 // misclassify scripts, diffs, JSON/YAML, and command output as Markdown and
-// mangle them. The cost is that a heading-and-prose-only Markdown doc piped in
+// mangle them. The cost is that loose Markdown-like prose with only inline cues
 // renders as plain text unless the caller passes --markdown.
 func Detect(src []byte) Kind {
 	window := src
@@ -92,11 +93,11 @@ var (
 )
 
 // looksLikeMarkdown reports a high-confidence Markdown structure in the (already
-// known-text) window: a fenced code block, a GFM table, a GFM task list, or a
-// setext heading.
+// known-text) window: a fenced code block, a GFM table, a GFM task list, a
+// setext heading, or an ATX heading separated from following prose.
 func looksLikeMarkdown(window []byte) bool {
 	scan := limitLines(window, detectScanLines)
-	return reFence.Match(scan) || hasTable(scan) || reTaskList.Match(scan) || hasSetextEq(scan)
+	return reFence.Match(scan) || hasTable(scan) || reTaskList.Match(scan) || hasSetextEq(scan) || hasATXHeading(scan)
 }
 
 // hasTable reports a GFM table: a delimiter row (pipes + dashes) with at least
@@ -124,6 +125,33 @@ func hasSetextEq(scan []byte) bool {
 			continue
 		}
 		if allByte(cur, '=') || allByte(cur, '-') && (i+1 == len(lines) || len(bytes.TrimSpace(lines[i+1])) == 0) {
+			return true
+		}
+	}
+	return false
+}
+
+// hasATXHeading reports a Markdown # heading only when it has valid heading
+// syntax and is followed by a blank line or EOF. That keeps hash-prefixed log
+// lines and source-code comments plain.
+func hasATXHeading(scan []byte) bool {
+	lines := bytes.Split(scan, []byte("\n"))
+	for i, line := range lines {
+		trimmed := bytes.TrimLeft(line, " \t")
+		if len(line)-len(trimmed) > 3 || len(trimmed) == 0 || trimmed[0] != '#' {
+			continue
+		}
+		hashes := 0
+		for hashes < len(trimmed) && trimmed[hashes] == '#' {
+			hashes++
+		}
+		if hashes > 6 || hashes >= len(trimmed) || trimmed[hashes] != ' ' && trimmed[hashes] != '\t' {
+			continue
+		}
+		if len(bytes.TrimSpace(trimmed[hashes:])) == 0 {
+			continue
+		}
+		if i+1 == len(lines) || len(bytes.TrimSpace(lines[i+1])) == 0 {
 			return true
 		}
 	}

@@ -44,6 +44,7 @@ type Options struct {
 	OpenCmd  string    // launcher command (config open_command); "" = OS default
 	MaxWidth string    // reader column CSS max-width (config max_width); "" = default
 	Theme    string    // initial theme (config default_theme): "light"|"dark"|"auto"|""
+	Palette  string    // initial palette (config default_palette): sepia|blue|green|rose|catppuccin|""
 	TOC      *bool     // TOC override (config toc): nil = automatic
 	Output   string    // -o: write rendered HTML to this path ("-" = stdout) instead of caching+opening; "" = default
 
@@ -393,6 +394,7 @@ func buildRenderOpts(opts Options, fallbackTitle, sourceName string, plain bool)
 		Safe:          opts.Safe,
 		MaxWidth:      opts.MaxWidth,
 		Theme:         opts.Theme,
+		Palette:       opts.Palette,
 		TOC:           opts.TOC,
 		Plain:         plain,
 		Frame:         opts.Frame,

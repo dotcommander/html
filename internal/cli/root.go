@@ -84,6 +84,7 @@ func newRootCmd() *cobra.Command {
 				OpenCmd:    cfg.OpenCommand,
 				MaxWidth:   cfg.MaxWidth,
 				Theme:      cfg.DefaultTheme,
+				Palette:    cfg.DefaultPalette,
 				TOC:        cfg.TOC,
 				Output:     output,
 				Report:     reportRequested,

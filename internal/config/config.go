@@ -18,6 +18,7 @@ type Config struct {
 	OpenCommand  string `json:"open_command"`  // launcher command (e.g. "firefox"); "" = OS default
 	MaxWidth     string `json:"max_width"`     // reader column CSS max-width (e.g. "48rem"); "" = default
 	DefaultTheme string `json:"default_theme"` // "light" | "dark" | "auto"; "" = auto (system)
+	DefaultPalette string `json:"default_palette"` // "sepia" | "blue" | "green" | "rose" | "catppuccin"; "" = sepia
 	TOC          *bool  `json:"toc"`           // override automatic TOC; nil = automatic
 }
 
@@ -87,6 +88,11 @@ func (c Config) validate() error {
 	case "", "light", "dark", "auto":
 	default:
 		return fmt.Errorf("default_theme must be \"light\", \"dark\", or \"auto\" (got %q)", c.DefaultTheme)
+	}
+	switch c.DefaultPalette {
+	case "", "sepia", "blue", "green", "rose", "catppuccin":
+	default:
+		return fmt.Errorf("default_palette must be \"sepia\", \"blue\", \"green\", \"rose\", or \"catppuccin\" (got %q)", c.DefaultPalette)
 	}
 	if c.MaxWidth != "" && !maxWidthRe.MatchString(c.MaxWidth) {
 		return fmt.Errorf("max_width must be a CSS length like \"48rem\" (got %q)", c.MaxWidth)

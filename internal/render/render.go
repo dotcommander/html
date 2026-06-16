@@ -66,6 +66,9 @@ type Options struct {
 	// Theme is the initial color theme fallback: "light" or "dark" forces that
 	// theme before any localStorage choice; "" or "auto" follows the system.
 	Theme string
+	// Palette is the initial color-family fallback. Valid values are sepia,
+	// blue, green, rose, and catppuccin; "" uses sepia.
+	Palette string
 	// TOC overrides the automatic table of contents: nil = automatic (by heading
 	// count), true = always, false = never.
 	TOC *bool
@@ -124,6 +127,9 @@ func (o Options) cacheTag() string {
 	}
 	if o.Theme != "" {
 		appendCacheTag(&b, "theme", o.Theme)
+	}
+	if o.Palette != "" {
+		appendCacheTag(&b, "palette", o.Palette)
 	}
 	if o.TOC != nil {
 		if *o.TOC {
