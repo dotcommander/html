@@ -107,7 +107,7 @@ func componentsFor(a Analysis) (Kind, Mode, []Component) {
 	case KindDiff:
 		return a.Kind, ModeReview, []Component{{Type: ComponentSummary, Source: "analysis", Title: "Summary", Options: map[string]string{}}, {Type: ComponentDiffView, Source: "input", Title: "Diff", Options: map[string]string{}}}
 	case KindSourceCode:
-		return a.Kind, ModeCode, []Component{{Type: ComponentCodeBlock, Source: "input", Title: "Code", Options: map[string]string{}}}
+		return a.Kind, ModeCode, []Component{{Type: ComponentSummary, Source: "analysis", Title: "Summary", Options: map[string]string{}}, {Type: ComponentCodeBlock, Source: "input", Title: "Code", Options: map[string]string{}}}
 	case KindTreeListing:
 		return a.Kind, ModeCode, []Component{{Type: ComponentSummary, Source: "analysis", Title: "Summary", Options: map[string]string{}}, {Type: ComponentFileTree, Source: "input", Title: "Files", Options: map[string]string{}}}
 	case KindLog, KindTranscript:
@@ -332,7 +332,7 @@ func llmUserPrompt(analysis Analysis, fallback ReportPlan, summary string, src [
 		sample = sample[:8000]
 	}
 	return "Allowed kind: markdown, json-records, json-object, csv-records, tsv-records, diff, source-code, tree-listing, log, transcript, mixed, plain, binary.\n" +
-		"Allowed layout: single-page, tabbed-page.\n" +
+		"Allowed layout: single-page, tabbed-page, slides-page.\n" +
 		"Allowed mode: reader, data-browser, review, console, code, brief.\n" +
 		"Allowed component type: article, preformatted, code-block, data-table, record-cards, diff-view, file-tree, summary, raw-json.\n" +
 		"Allowed component source: input, analysis, records.\n" +

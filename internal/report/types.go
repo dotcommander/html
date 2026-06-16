@@ -9,7 +9,7 @@ import (
 
 const (
 	PlanVersion          = 1
-	PlannerPromptVersion = "report-plan-v6"
+	PlannerPromptVersion = "report-plan-v7"
 )
 
 type Kind string

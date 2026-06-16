@@ -39,8 +39,11 @@ func reportTitle(src []byte, opts Options, analysis report.Analysis) string {
 }
 
 func renderReportBody(src []byte, opts Options, analysis report.Analysis, plan report.ReportPlan) (string, error) {
-	if plan.Layout == report.LayoutTabbedPage {
+	switch plan.Layout {
+	case report.LayoutTabbedPage:
 		return renderTabs(src, opts, analysis, plan.Components)
+	case report.LayoutSlides:
+		return renderSlides(src, opts, analysis, plan.Components)
 	}
 	var b strings.Builder
 	for _, c := range plan.Components {
@@ -75,6 +78,21 @@ func renderTabs(src []byte, opts Options, analysis report.Analysis, components [
 		fmt.Fprintf(&panels, `<section id="%s" class="report-tab-panel" role="tabpanel" aria-labelledby="%s"%s>%s</section>`, panelID, tabID, hidden, part)
 	}
 	return `<div class="report-tabs" data-report-tabs><div class="report-tab-list" role="tablist">` + buttons.String() + `</div>` + panels.String() + `</div>`, nil
+}
+
+func renderSlides(src []byte, opts Options, analysis report.Analysis, components []report.Component) (string, error) {
+	var b strings.Builder
+	b.WriteString(`<div class="report-slides" data-report-slides>`)
+	total := len(components)
+	for i, c := range components {
+		part, err := renderReportComponent(src, opts, analysis, c)
+		if err != nil {
+			return "", err
+		}
+		fmt.Fprintf(&b, `<section class="report-slide" aria-label="Slide %d of %d: %s"><div class="report-slide-count">%d / %d</div>%s</section>`, i+1, total, htmlpkg.EscapeString(c.Title), i+1, total, part)
+	}
+	b.WriteString(`</div>`)
+	return b.String(), nil
 }
 
 func renderReportComponent(src []byte, opts Options, analysis report.Analysis, c report.Component) (string, error) {
