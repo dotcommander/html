@@ -13,6 +13,11 @@ func labeledCell(label, value string) string {
 	return `<td data-label="` + escapeTableText(label) + `">` + escapeTableText(value) + `</td>`
 }
 
+func sortHeaderButton(label string) string {
+	escaped := escapeTableText(label)
+	return `<button type="button" data-sort-label="` + escaped + `" aria-label="Sort by ` + escaped + ` ascending">` + escaped + `</button>`
+}
+
 func cardField(label, value string) string {
 	return `<div><dt>` + escapeTableText(label) + `</dt><dd>` + escapeTableText(value) + `</dd></div>`
 }
@@ -93,8 +98,58 @@ func TestRenderReport_SlidesLayout(t *testing.T) {
 	assert.Contains(t, got, `class="report-slide" aria-label="Slide 2 of 2: Records"`)
 	assert.Contains(t, got, `<div class="report-slide-count">1 / 2</div>`)
 	assert.Contains(t, got, `<div class="report-slide-count">2 / 2</div>`)
+	assert.Contains(t, got, `class="report-slide-controls" aria-label="Slide controls"`)
+	assert.Contains(t, got, `data-slide-prev`)
+	assert.Contains(t, got, `data-slide-status>1 / 2</span>`)
+	assert.Contains(t, got, `data-slide-next`)
 	assert.Contains(t, got, `.report-slide`)
 	assert.NotContains(t, got, `role="tablist"`)
+}
+
+func TestRenderReport_MixedSummaryShowsSignalNames(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("Notes\n- check deploy\n\nPayload\n{\"ok\":true}\n\nERROR failed\n")
+	analysis, plan := report.Plan(t.Context(), src, report.Options{Planner: report.PlannerOff})
+
+	got, err := RenderReport(src, Options{FallbackTitle: "mixed"}, analysis, plan)
+	require.NoError(t, err)
+
+	assert.Contains(t, got, `<dt>Kind</dt><dd>mixed</dd>`)
+	assert.Contains(t, got, `multiple weak format signals: markdown-like prose, json-like block, log severity`)
+	assert.Contains(t, got, `role="tablist"`)
+	assert.Contains(t, got, `>Summary</button>`)
+	assert.Contains(t, got, `>Input</button>`)
+	assert.Contains(t, got, `<dl class="text-overview" aria-label="Text overview">`)
+	assert.Contains(t, got, `ERROR failed`)
+}
+
+func TestRenderReport_PlainUsesTextOverview(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("ordinary prose with no structural markup\nsecond line\n")
+	analysis := report.Analyze(src, "notes.txt")
+	plan := report.ReportPlan{
+		Version: report.PlanVersion,
+		Kind:    report.KindPlain,
+		Layout:  report.LayoutSinglePage,
+		Mode:    report.ModeBrief,
+		Components: []report.Component{
+			{Type: report.ComponentSummary, Source: "analysis", Title: "Summary", Options: map[string]string{}},
+			{Type: report.ComponentPreformatted, Source: "input", Title: "Input", Options: map[string]string{}},
+		},
+	}
+
+	require.Equal(t, report.KindPlain, analysis.Kind)
+
+	got, err := RenderReport(src, Options{FallbackTitle: "notes"}, analysis, plan)
+	require.NoError(t, err)
+
+	assert.Contains(t, got, `<dl class="text-overview" aria-label="Text overview">`)
+	assert.Contains(t, got, `<dt>Lines</dt><dd>2</dd>`)
+	assert.Contains(t, got, `<dt>Words</dt><dd>8</dd>`)
+	assert.Contains(t, got, `<dt>Characters</dt><dd>53</dd>`)
+	assert.Contains(t, got, `<pre class="report-text"><code class="language-plaintext">ordinary prose`)
 }
 
 func TestRenderReport_FilterStatusSingular(t *testing.T) {
@@ -116,10 +171,66 @@ func TestRenderReport_FilterStatusSingular(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<p class="report-filter-status" aria-live="polite">1 row</p>`)
+	assert.Contains(t, got, `<div class="report-mobile-sort"><select aria-label="Sort rows"><option value="">Sort rows</option><option value="0:ascending">name ↑</option><option value="0:descending">name ↓</option><option value="1:ascending">score ↑</option><option value="1:descending">score ↓</option></select></div>`)
+	assert.Contains(t, got, `<button type="button" data-sort-label="name" aria-label="Sort by name ascending">name</button>`)
+	assert.Contains(t, got, `<button type="button" data-sort-label="score" aria-label="Sort by score ascending">score</button>`)
 	assert.NotContains(t, got, `>1 rows<`)
 }
 
-func TestRenderReport_PreformattedPreservesANSI(t *testing.T) {
+func TestRenderReport_TranscriptUsesStructuredTurns(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("Host: Welcome back.\nGuest: Thanks for having me.\ncontinued answer\nHost: Let's begin <now>.\n")
+	analysis := report.Analyze(src, "transcript.txt")
+	plan := report.ReportPlan{
+		Version: report.PlanVersion,
+		Kind:    report.KindTranscript,
+		Layout:  report.LayoutSinglePage,
+		Mode:    report.ModeConsole,
+		Components: []report.Component{
+			{Type: report.ComponentSummary, Source: "analysis", Title: "Summary", Options: map[string]string{}},
+			{Type: report.ComponentPreformatted, Source: "input", Title: "Transcript", Options: map[string]string{}},
+		},
+	}
+
+	require.Equal(t, report.KindTranscript, analysis.Kind)
+
+	got, err := RenderReport(src, Options{FallbackTitle: "transcript"}, analysis, plan)
+	require.NoError(t, err)
+
+	assert.Contains(t, got, `<ol class="transcript-turns">`)
+	assert.Contains(t, got, `<li class="transcript-turn"><span class="transcript-speaker">Host</span><div class="transcript-text"><p>Welcome back.</p></div></li>`)
+	assert.Contains(t, got, `<span class="transcript-speaker">Guest</span><div class="transcript-text"><p>Thanks for having me.</p><p>continued answer</p></div>`)
+	assert.Contains(t, got, `<p>Let&#39;s begin &lt;now&gt;.</p>`)
+	assert.NotContains(t, got, `<pre><code class="language-plaintext">`)
+}
+
+func TestRenderReport_TranscriptStripsANSI(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("Host: \x1b[32mWelcome back\x1b[0m.\nGuest: Thanks.\nHost: Done.\n")
+	analysis := report.Analyze(src, "transcript.txt")
+	plan := report.ReportPlan{
+		Version: report.PlanVersion,
+		Kind:    report.KindTranscript,
+		Layout:  report.LayoutSinglePage,
+		Mode:    report.ModeConsole,
+		Components: []report.Component{
+			{Type: report.ComponentPreformatted, Source: "input", Title: "Transcript", Options: map[string]string{}},
+		},
+	}
+
+	require.Equal(t, report.KindTranscript, analysis.Kind)
+
+	got, err := RenderReport(src, Options{FallbackTitle: "transcript"}, analysis, plan)
+	require.NoError(t, err)
+
+	assert.Contains(t, got, `<p>Welcome back.</p>`)
+	assert.NotContains(t, got, "\x1b[32m")
+	assert.NotContains(t, got, "\x1b[0m")
+}
+
+func TestRenderReport_LogUsesStructuredLines(t *testing.T) {
 	t.Parallel()
 
 	src := []byte("2026-06-16 12:00:00 \x1b[31mERROR\x1b[0m fail\n2026-06-16 12:00:01 INFO ok\n")
@@ -137,10 +248,56 @@ func TestRenderReport_PreformattedPreservesANSI(t *testing.T) {
 	got, err := RenderReport(src, Options{FallbackTitle: "log"}, analysis, plan)
 	require.NoError(t, err)
 
-	assert.Contains(t, got, `class="language-ansi"`)
-	assert.Contains(t, got, `style="color:#aa0000"`)
-	assert.Contains(t, got, `ERROR`)
+	assert.Contains(t, got, `<ol class="log-lines">`)
+	assert.Contains(t, got, `<li class="log-line log-error"><span class="log-level">ERROR</span><span class="log-message">2026-06-16 12:00:00 ERROR fail</span></li>`)
+	assert.Contains(t, got, `<li class="log-line log-info"><span class="log-level">INFO</span><span class="log-message">2026-06-16 12:00:01 INFO ok</span></li>`)
+	assert.NotContains(t, got, `<pre><code class="language-plaintext">`)
 	assert.NotContains(t, got, "\x1b[31m")
+}
+
+func TestRenderReport_LogEscapesAndClassifiesGoTestLines(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("--- FAIL: TestThing (0.00s)\n    thing_test.go:10: got <bad>\nok\tgithub.com/example/project\t0.123s\n")
+	analysis := report.Analyze(src, "go-test.log")
+	plan := report.ReportPlan{
+		Version: report.PlanVersion,
+		Kind:    report.KindLog,
+		Layout:  report.LayoutSinglePage,
+		Mode:    report.ModeConsole,
+		Components: []report.Component{
+			{Type: report.ComponentPreformatted, Source: "input", Title: "Log", Options: map[string]string{}},
+		},
+	}
+
+	require.Equal(t, report.KindLog, analysis.Kind)
+
+	got, err := RenderReport(src, Options{FallbackTitle: "go-test"}, analysis, plan)
+	require.NoError(t, err)
+
+	assert.Contains(t, got, `<li class="log-line log-error"><span class="log-level">ERROR</span><span class="log-message">--- FAIL: TestThing (0.00s)</span></li>`)
+	assert.Contains(t, got, `<span class="log-message">    thing_test.go:10: got &lt;bad&gt;</span>`)
+	assert.Contains(t, got, `<li class="log-line log-info"><span class="log-level">INFO</span><span class="log-message">ok	github.com/example/project	0.123s</span></li>`)
+}
+
+func TestRenderReport_ForcedLogModeUsesStructuredLines(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("starting\nplain line without timestamp\nERROR forced mode still classifies\n")
+	analysis, plan := report.Plan(t.Context(), src, report.Options{Mode: report.ModeOverrideLog, Planner: report.PlannerOff})
+
+	require.Equal(t, report.KindPlain, analysis.Kind)
+	require.Equal(t, report.ModeConsole, plan.Mode)
+
+	got, err := RenderReport(src, Options{FallbackTitle: "forced-log"}, analysis, plan)
+	require.NoError(t, err)
+
+	assert.Contains(t, got, `<h2>Log</h2>`)
+	assert.Contains(t, got, `<ol class="log-lines">`)
+	assert.Contains(t, got, `<li class="log-line"><span class="log-message">starting</span></li>`)
+	assert.Contains(t, got, `<li class="log-line log-error"><span class="log-level">ERROR</span><span class="log-message">ERROR forced mode still classifies</span></li>`)
+	assert.NotContains(t, got, `<dl class="text-overview"`)
+	assert.NotContains(t, got, `<pre class="report-text"`)
 }
 
 func TestRenderReport_CodeBlockPreservesANSI(t *testing.T) {
@@ -167,6 +324,55 @@ func TestRenderReport_CodeBlockPreservesANSI(t *testing.T) {
 	assert.NotContains(t, got, "\x1b[31m")
 }
 
+func TestRenderReport_SourceCodeShowsOverview(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("package main\n\nfunc main() {}\n")
+	analysis := report.Analyze(src, "main.go")
+	plan := report.ReportPlan{
+		Version: report.PlanVersion,
+		Kind:    report.KindSourceCode,
+		Layout:  report.LayoutSinglePage,
+		Mode:    report.ModeCode,
+		Components: []report.Component{
+			{Type: report.ComponentSummary, Source: "analysis", Title: "Summary", Options: map[string]string{}},
+			{Type: report.ComponentCodeBlock, Source: "input", Title: "Code", Options: map[string]string{}},
+		},
+	}
+
+	require.Equal(t, report.KindSourceCode, analysis.Kind)
+
+	got, err := RenderReport(src, Options{FallbackTitle: "main", SourceName: "main.go"}, analysis, plan)
+	require.NoError(t, err)
+
+	assert.Contains(t, got, `<dl class="code-overview" aria-label="Code overview">`)
+	assert.Contains(t, got, `<dt>Language</dt><dd>Go</dd>`)
+	assert.Contains(t, got, `<dt>Source</dt><dd>main.go</dd>`)
+	assert.Contains(t, got, `<dt>Lines</dt><dd>3</dd>`)
+	assert.Contains(t, got, `class="chroma light"`)
+}
+
+func TestRenderReport_ForcedCodeModeShowsOverview(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("plain text\nwithout a source lexer\n")
+	analysis, plan := report.Plan(t.Context(), src, report.Options{Mode: report.ModeOverrideCode, Planner: report.PlannerOff})
+
+	require.Equal(t, report.KindPlain, analysis.Kind)
+	require.Equal(t, report.ModeCode, plan.Mode)
+
+	got, err := RenderReport(src, Options{FallbackTitle: "forced-code", SourceName: "notes.txt"}, analysis, plan)
+	require.NoError(t, err)
+
+	assert.Contains(t, got, `<h2>Code</h2>`)
+	assert.Contains(t, got, `<dl class="code-overview" aria-label="Code overview">`)
+	assert.Contains(t, got, `<dt>Language</dt><dd>Plain text</dd>`)
+	assert.Contains(t, got, `<dt>Source</dt><dd>notes.txt</dd>`)
+	assert.Contains(t, got, `<dt>Lines</dt><dd>2</dd>`)
+	assert.Contains(t, got, `<pre><code class="language-plaintext">plain text`)
+	assert.NotContains(t, got, `<dl class="text-overview"`)
+}
+
 func TestRenderReport_ArticleForcesMarkdownRendering(t *testing.T) {
 	t.Parallel()
 
@@ -186,9 +392,37 @@ func TestRenderReport_ArticleForcesMarkdownRendering(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<h1 id="title">Title`)
+	assert.Contains(t, got, `<dl class="article-overview" aria-label="Article overview">`)
+	assert.Contains(t, got, `<dt>Lines</dt><dd>3</dd>`)
+	assert.Contains(t, got, `<dt>Headings</dt><dd>1</dd>`)
 	assert.Contains(t, got, `<p>Body</p>`)
 	assert.NotContains(t, got, `class="language-plaintext"`)
 	assert.NotContains(t, got, `# Title`)
+}
+
+func TestRenderReport_ArticleOverviewCountsSections(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("# Title\n\nIntro.\n\n## One\n\nBody.\n\n## Two\n\nMore.\n")
+	analysis := report.Analyze(src, "doc.md")
+	plan := report.ReportPlan{
+		Version: report.PlanVersion,
+		Kind:    analysis.Kind,
+		Layout:  report.LayoutSinglePage,
+		Mode:    report.ModeReader,
+		Components: []report.Component{
+			{Type: report.ComponentArticle, Source: "input", Title: "Article", Options: map[string]string{}},
+		},
+	}
+
+	got, err := RenderReport(src, Options{FallbackTitle: "doc"}, analysis, plan)
+	require.NoError(t, err)
+
+	assert.Contains(t, got, `<dt>Lines</dt><dd>11</dd>`)
+	assert.Contains(t, got, `<dt>Headings</dt><dd>3</dd>`)
+	assert.Contains(t, got, `<dt>Sections</dt><dd>2</dd>`)
+	assert.Contains(t, got, `<h2 id="one">One</h2>`)
+	assert.Contains(t, got, `<h2 id="two">Two</h2>`)
 }
 
 func TestRenderReport_ArticleUsesMarkdownHeadingTitle(t *testing.T) {
@@ -232,6 +466,7 @@ func TestRenderReport_DiffViewStripsANSIBeforeClassifying(t *testing.T) {
 	got, err := RenderReport(src, Options{FallbackTitle: "patch"}, analysis, plan)
 	require.NoError(t, err)
 
+	assert.Contains(t, got, `<div class="diff-summary" aria-label="Diff summary"><span><strong>1</strong> file</span><span><strong>1</strong> hunk</span><span class="diff-added"><strong>+1</strong> addition</span><span class="diff-removed"><strong>-1</strong> deletion</span></div>`)
 	assert.Contains(t, got, `<span class="del">-old</span>`)
 	assert.Contains(t, got, `<span class="add">+new</span>`)
 	assert.NotContains(t, got, "\x1b[31m")
@@ -265,6 +500,7 @@ func TestRenderReport_PlainUnifiedDiffUsesDiffView(t *testing.T) {
 
 	assert.Contains(t, got, `<dd>diff</dd>`)
 	assert.Contains(t, got, `<h2>Diff</h2>`)
+	assert.Contains(t, got, `<div class="diff-summary" aria-label="Diff summary">`)
 	assert.Contains(t, got, `<span class="file">--- old.txt</span>`)
 	assert.Contains(t, got, `<span class="file">+++ new.txt</span>`)
 	assert.Contains(t, got, `<span class="del">-old</span>`)
@@ -313,6 +549,8 @@ func TestRenderReport_CombinedDiffUsesDiffView(t *testing.T) {
 
 	assert.Contains(t, got, `<dd>diff</dd>`)
 	assert.Contains(t, got, `<span class="file">diff --cc main.go</span>`)
+	assert.Contains(t, got, `<span class="diff-added"><strong>+1</strong> addition</span>`)
+	assert.Contains(t, got, `<span class="diff-removed"><strong>-2</strong> deletions</span>`)
 	assert.Contains(t, got, `<span class="hunk">@@@ -1,1 -1,1 +1,1 @@@</span>`)
 	assert.Contains(t, got, `<span class="del">- left</span>`)
 	assert.Contains(t, got, `<span class="del"> -right</span>`)
@@ -837,11 +1075,66 @@ func TestRenderReport_RecordCardsOmitEmptyFields(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `class="record-card"`)
+	assert.Contains(t, got, `<h3>Record 1: has-null</h3>`)
+	assert.Contains(t, got, `<h3>Record 2: missing</h3>`)
 	assert.Contains(t, got, cardField("name", "has-null"))
 	assert.Contains(t, got, cardField("value", "null"))
 	assert.Contains(t, got, cardField("owner", "Ops"))
 	assert.NotContains(t, got, cardField("owner", ""))
 	assert.NotContains(t, got, cardField("value", ""))
+}
+
+func TestRenderReport_RecordCardsShowEmptyState(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("name,score\n")
+	analysis := report.Analysis{
+		Kind:       report.KindCSVRecords,
+		Confidence: 0.8,
+		Reasons:    []string{"csv header"},
+		Stats:      report.Stats{Bytes: len(src), Lines: 1, Records: 0, Fields: 2},
+		Data:       [][]string{{"name", "score"}},
+	}
+	plan := report.ReportPlan{
+		Version: report.PlanVersion,
+		Kind:    report.KindCSVRecords,
+		Layout:  report.LayoutSinglePage,
+		Mode:    report.ModeDataBrowser,
+		Components: []report.Component{
+			{Type: report.ComponentRecordCards, Source: "records", Title: "Details", Options: map[string]string{}},
+		},
+	}
+
+	got, err := RenderReport(src, Options{FallbackTitle: "empty"}, analysis, plan)
+	require.NoError(t, err)
+
+	assert.Contains(t, got, `<p class="record-empty" aria-live="polite">No records</p>`)
+	assert.NotContains(t, got, `<div class="record-cards">`)
+	assert.NotContains(t, got, `<article class="record-card">`)
+}
+
+func TestRenderReport_RecordCardsPreferTitleFields(t *testing.T) {
+	t.Parallel()
+
+	src := []byte(`[{"id":"A-1","title":"First Title"},{"id":"B-2","key":"fallback-key"},{"key":"C-3","value":"kept"},{"value":"untitled"}]`)
+	analysis := report.Analyze(src, "values.json")
+	plan := report.ReportPlan{
+		Version: report.PlanVersion,
+		Kind:    report.KindJSONRecords,
+		Layout:  report.LayoutSinglePage,
+		Mode:    report.ModeDataBrowser,
+		Components: []report.Component{
+			{Type: report.ComponentRecordCards, Source: "records", Title: "Details", Options: map[string]string{}},
+		},
+	}
+
+	got, err := RenderReport(src, Options{FallbackTitle: "values"}, analysis, plan)
+	require.NoError(t, err)
+
+	assert.Contains(t, got, `<h3>Record 1: First Title</h3>`)
+	assert.Contains(t, got, `<h3>Record 2: B-2</h3>`)
+	assert.Contains(t, got, `<h3>Record 3: C-3</h3>`)
+	assert.Contains(t, got, `<h3>Record 4</h3>`)
 }
 
 func TestRenderReport_JSONTableIgnoresLeadingBOM(t *testing.T) {
@@ -882,6 +1175,38 @@ func TestRenderReport_JSONScalarFileRendersRawJSON(t *testing.T) {
 	assert.NotContains(t, got, `9007199254740992`)
 }
 
+func TestRenderReport_JSONObjectShowsOverview(t *testing.T) {
+	t.Parallel()
+
+	src := []byte(`{"name":"alpha","score":10,"tags":["qa","html"],"meta":{"ok":true},"active":false}`)
+	analysis, plan := report.Plan(t.Context(), src, report.Options{SourceName: "object.json", Planner: report.PlannerOff})
+
+	got, err := RenderReport(src, Options{FallbackTitle: "object"}, analysis, plan)
+	require.NoError(t, err)
+
+	assert.Contains(t, got, `<dd>json-object</dd>`)
+	assert.Contains(t, got, `<dl class="json-overview" aria-label="JSON overview">`)
+	assert.Contains(t, got, `<dt>active</dt><dd>boolean</dd>`)
+	assert.Contains(t, got, `<dt>meta</dt><dd>object (1)</dd>`)
+	assert.Contains(t, got, `<dt>name</dt><dd>string</dd>`)
+	assert.Contains(t, got, `<dt>score</dt><dd>number</dd>`)
+	assert.Contains(t, got, `<dt>tags</dt><dd>array (2)</dd>`)
+	assert.Contains(t, got, `&#34;score&#34;: 10`)
+}
+
+func TestRenderReport_JSONArrayShowsOverview(t *testing.T) {
+	t.Parallel()
+
+	src := []byte(`[1,"two",true]`)
+	analysis, plan := report.Plan(t.Context(), src, report.Options{SourceName: "array.json", Planner: report.PlannerOff})
+
+	got, err := RenderReport(src, Options{FallbackTitle: "array"}, analysis, plan)
+	require.NoError(t, err)
+
+	assert.Contains(t, got, `<dd>json-object</dd>`)
+	assert.Contains(t, got, `<div class="json-overview" aria-label="JSON overview"><span><strong>3</strong> items</span><span>array (3)</span></div>`)
+}
+
 func TestRenderReport_JSONLinesTableUsesAnalyzedRecords(t *testing.T) {
 	t.Parallel()
 
@@ -892,8 +1217,8 @@ func TestRenderReport_JSONLinesTableUsesAnalyzedRecords(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `class="report-table"`)
-	assert.Contains(t, got, `<th scope="col"><button type="button">name</button></th>`)
-	assert.Contains(t, got, `<th scope="col"><button type="button">score</button></th>`)
+	assert.Contains(t, got, `<th scope="col">`+sortHeaderButton("name")+`</th>`)
+	assert.Contains(t, got, `<th scope="col">`+sortHeaderButton("score")+`</th>`)
 	assert.Contains(t, got, labeledCell("name", "a")+labeledCell("score", "1"))
 	assert.Contains(t, got, labeledCell("name", "b")+labeledCell("score", "2"))
 }
@@ -962,8 +1287,8 @@ func TestRenderReport_CSVTablePreservesDuplicateHeaderCells(t *testing.T) {
 	got, err := RenderReport(src, Options{FallbackTitle: "tags"}, analysis, plan)
 	require.NoError(t, err)
 
-	assert.Contains(t, got, `<button type="button">tag</button><`)
-	assert.Contains(t, got, `<button type="button">tag 2</button>`)
+	assert.Contains(t, got, sortHeaderButton("tag")+`<`)
+	assert.Contains(t, got, sortHeaderButton("tag 2"))
 	assert.Contains(t, got, labeledCell("tag", "left")+labeledCell("tag 2", "right"))
 	assert.NotContains(t, got, labeledCell("tag", "right")+labeledCell("tag 2", "right"))
 }
@@ -986,9 +1311,9 @@ func TestRenderReport_CSVTableDeduplicatesHeaderLabelCollisions(t *testing.T) {
 	got, err := RenderReport(src, Options{FallbackTitle: "tags"}, analysis, plan)
 	require.NoError(t, err)
 
-	assert.Contains(t, got, `<button type="button">tag</button>`)
-	assert.Contains(t, got, `<button type="button">tag 2</button>`)
-	assert.Contains(t, got, `<button type="button">tag 2 2</button>`)
+	assert.Contains(t, got, sortHeaderButton("tag"))
+	assert.Contains(t, got, sortHeaderButton("tag 2"))
+	assert.Contains(t, got, sortHeaderButton("tag 2 2"))
 	assert.Contains(t, got, labeledCell("tag", "left")+labeledCell("tag 2", "middle")+labeledCell("tag 2 2", "right"))
 }
 
@@ -1010,8 +1335,8 @@ func TestRenderReport_CSVTableLabelsBlankHeaders(t *testing.T) {
 	got, err := RenderReport(src, Options{FallbackTitle: "scores"}, analysis, plan)
 	require.NoError(t, err)
 
-	assert.Contains(t, got, `<button type="button">Column 2</button>`)
-	assert.NotContains(t, got, `<button type="button"></button>`)
+	assert.Contains(t, got, sortHeaderButton("Column 2"))
+	assert.NotContains(t, got, `data-sort-label=""`)
 	assert.Contains(t, got, labeledCell("name", "Alpha")+labeledCell("Column 2", "10"))
 }
 
@@ -1036,9 +1361,9 @@ func TestRenderReport_CSVTablePreservesRecordSpaces(t *testing.T) {
 	got, err := RenderReport(src, Options{FallbackTitle: "scores"}, analysis, plan)
 	require.NoError(t, err)
 
-	assert.Contains(t, got, `<button type="button"> name</button>`)
+	assert.Contains(t, got, sortHeaderButton(" name"))
 	assert.Contains(t, got, labeledCell(" name", " Alpha")+labeledCell("score", "1 "))
-	assert.NotContains(t, got, `<button type="button">name</button>`)
+	assert.NotContains(t, got, sortHeaderButton("name"))
 	assert.NotContains(t, got, labeledCell(" name", "   ")+labeledCell("score", ""))
 }
 
@@ -1062,7 +1387,7 @@ func TestRenderReport_TableStripsANSI(t *testing.T) {
 	got, err := RenderReport(src, Options{FallbackTitle: "scores"}, analysis, plan)
 	require.NoError(t, err)
 
-	assert.Contains(t, got, `<button type="button">name</button>`)
+	assert.Contains(t, got, sortHeaderButton("name"))
 	assert.Contains(t, got, labeledCell("name", "Alpha")+labeledCell("score", "10"))
 	assert.NotContains(t, got, "\x1b[1m")
 	assert.NotContains(t, got, "\x1b[32m")
@@ -1088,8 +1413,8 @@ func TestRenderReport_TableDeduplicatesANSIHeaderLabels(t *testing.T) {
 	got, err := RenderReport(src, Options{FallbackTitle: "names"}, analysis, plan)
 	require.NoError(t, err)
 
-	assert.Contains(t, got, `<button type="button">name</button>`)
-	assert.Contains(t, got, `<button type="button">name 2</button>`)
+	assert.Contains(t, got, sortHeaderButton("name"))
+	assert.Contains(t, got, sortHeaderButton("name 2"))
 	assert.NotContains(t, got, "\x1b[1m")
 }
 
@@ -1143,6 +1468,33 @@ func TestRenderReport_TSVTableUsesAnalyzerRows(t *testing.T) {
 	assert.Contains(t, got, `<p class="report-filter-status" aria-live="polite">1 row</p>`)
 	assert.Contains(t, got, labeledCell("name", "Alpha")+labeledCell("score", "10"))
 	assert.NotContains(t, got, labeledCell("name", "   ")+labeledCell("score", ""))
+}
+
+func TestRenderReport_ASCIITableUsesAnalyzerRows(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("+----+-------+\n| id | name  |\n+----+-------+\n| 1  | alpha |\n| 2  | beta  |\n+----+-------+\n")
+	analysis := report.Analyze(src, "mysql.out")
+	plan := report.ReportPlan{
+		Version: report.PlanVersion,
+		Kind:    report.KindTableRecords,
+		Layout:  report.LayoutSinglePage,
+		Mode:    report.ModeDataBrowser,
+		Components: []report.Component{
+			{Type: report.ComponentDataTable, Source: "records", Title: "Records", Options: map[string]string{}},
+		},
+	}
+
+	require.Equal(t, report.KindTableRecords, analysis.Kind)
+	require.Equal(t, 2, analysis.Stats.Records)
+
+	got, err := RenderReport(src, Options{FallbackTitle: "mysql"}, analysis, plan)
+	require.NoError(t, err)
+
+	assert.Contains(t, got, `<p class="report-filter-status" aria-live="polite">2 rows</p>`)
+	assert.Contains(t, got, labeledCell("id", "1")+labeledCell("name", "alpha"))
+	assert.Contains(t, got, labeledCell("id", "2")+labeledCell("name", "beta"))
+	assert.NotContains(t, got, `+----+-------+`)
 }
 
 func TestRenderReport_SlidesSplitsMarkdownByH2(t *testing.T) {

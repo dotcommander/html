@@ -137,6 +137,19 @@ func TestAnalyze_DeterministicKinds(t *testing.T) {
 			wantType: ComponentDataTable,
 		},
 		{
+			name:       "csv header-only data file",
+			input:      "name,score\n",
+			sourceName: "empty.csv",
+			wantKind:   KindCSVRecords,
+			wantType:   ComponentDataTable,
+		},
+		{
+			name:     "single comma line stdin remains plain",
+			input:    "hello, world\n",
+			wantKind: KindPlain,
+			wantType: ComponentPreformatted,
+		},
+		{
 			name:     "timestamped csv records beat log markers",
 			input:    "time,level,msg\n2026-01-01 12:00:00,ERROR,oops\n2026-01-01 12:01:00,INFO,ok\n",
 			wantKind: KindCSVRecords,
@@ -146,6 +159,27 @@ func TestAnalyze_DeterministicKinds(t *testing.T) {
 			name:     "bom csv records",
 			input:    "\ufeff" + "name,score\na,1\n",
 			wantKind: KindCSVRecords,
+			wantType: ComponentDataTable,
+		},
+		{
+			name: "mysql boxed table records",
+			input: "+----+-------+\n" +
+				"| id | name  |\n" +
+				"+----+-------+\n" +
+				"| 1  | alpha |\n" +
+				"| 2  | beta  |\n" +
+				"+----+-------+\n",
+			wantKind: KindTableRecords,
+			wantType: ComponentDataTable,
+		},
+		{
+			name: "psql aligned table records",
+			input: " id | name\n" +
+				"----+-------\n" +
+				"  1 | alpha\n" +
+				"  2 | beta\n" +
+				"(2 rows)\n",
+			wantKind: KindTableRecords,
 			wantType: ComponentDataTable,
 		},
 		{
@@ -331,6 +365,24 @@ func TestAnalyze_DeterministicKinds(t *testing.T) {
 			wantType: ComponentPreformatted,
 		},
 		{
+			name:     "speaker transcript",
+			input:    "Host: Welcome back to the show.\nGuest: Thanks for having me.\nHost: Let's start with the launch.\nGuest: The first release is ready.\n",
+			wantKind: KindTranscript,
+			wantType: ComponentPreformatted,
+		},
+		{
+			name:     "speaker transcript with generic labels",
+			input:    "Speaker 1: We should verify the HTML output.\nSpeaker 2: I have the mobile screenshots.\nSpeaker 1: The controls no longer overlap.\n",
+			wantKind: KindTranscript,
+			wantType: ComponentPreformatted,
+		},
+		{
+			name:     "uppercase config keys are not transcript",
+			input:    "Host: localhost\nPort: 8080\nMode: production\n",
+			wantKind: KindPlain,
+			wantType: ComponentPreformatted,
+		},
+		{
 			name:       "single timestamped severity log line",
 			input:      "2026-06-16 12:00:00 ERROR stop\n",
 			sourceName: "app.log",
@@ -462,6 +514,51 @@ func TestAnalyze_DelimitedPreservesRecordSpaces(t *testing.T) {
 	}
 }
 
+func TestAnalyze_HeaderOnlyCSVDataFile(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("name,score\n")
+	analysis := Analyze(src, "empty.csv")
+
+	if analysis.Kind != KindCSVRecords {
+		t.Fatalf("kind = %s, want %s; reasons=%v", analysis.Kind, KindCSVRecords, analysis.Reasons)
+	}
+	if analysis.Stats.Records != 0 || analysis.Stats.Fields != 2 {
+		t.Fatalf("stats = %#v, want 0 records and 2 fields", analysis.Stats)
+	}
+	records, ok := analysis.Data.([][]string)
+	if !ok {
+		t.Fatalf("data type = %T, want [][]string", analysis.Data)
+	}
+	if len(records) != 1 || len(records[0]) != 2 {
+		t.Fatalf("records = %#v, want one header row with two fields", records)
+	}
+	if records[0][0] != "name" || records[0][1] != "score" {
+		t.Fatalf("headers = %#v, want name/score", records[0])
+	}
+}
+
+func TestAnalyze_ASCIITableRows(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("+----+-------+\n| id | name  |\n+----+-------+\n| 1  | alpha |\n| 2  | beta  |\n+----+-------+\n")
+	analysis := Analyze(src, "mysql.out")
+
+	if analysis.Kind != KindTableRecords {
+		t.Fatalf("kind = %s, want %s; reasons=%v", analysis.Kind, KindTableRecords, analysis.Reasons)
+	}
+	if analysis.Stats.Records != 2 || analysis.Stats.Fields != 2 {
+		t.Fatalf("stats = %#v, want 2 records and 2 fields", analysis.Stats)
+	}
+	records, ok := analysis.Data.([][]string)
+	if !ok {
+		t.Fatalf("data = %T, want [][]string", analysis.Data)
+	}
+	if records[0][0] != "id" || records[0][1] != "name" || records[2][1] != "beta" {
+		t.Fatalf("records = %#v, want parsed boxed table rows", records)
+	}
+}
+
 func TestAnalyze_PlainDiffFileCountExcludesHunkContent(t *testing.T) {
 	t.Parallel()
 
@@ -473,6 +570,25 @@ func TestAnalyze_PlainDiffFileCountExcludesHunkContent(t *testing.T) {
 	}
 	if analysis.Stats.Files != 1 {
 		t.Fatalf("files = %d, want 1", analysis.Stats.Files)
+	}
+}
+
+func TestAnalyze_MixedReportsSignalNames(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("Notes\n- check deploy\n\nPayload\n{\"ok\":true}\n\nERROR failed\n")
+	analysis := Analyze(src, "")
+
+	if analysis.Kind != KindMixed {
+		t.Fatalf("kind = %s, want %s", analysis.Kind, KindMixed)
+	}
+	if len(analysis.Reasons) != 1 {
+		t.Fatalf("reasons = %#v, want one reason", analysis.Reasons)
+	}
+	for _, want := range []string{"multiple weak format signals", "markdown-like prose", "json-like block", "log severity"} {
+		if !strings.Contains(analysis.Reasons[0], want) {
+			t.Fatalf("reason %q does not contain %q", analysis.Reasons[0], want)
+		}
 	}
 }
 
@@ -714,8 +830,8 @@ func TestPlan_TableOverrideRequiresRecordRows(t *testing.T) {
 	if p.Kind != KindPlain {
 		t.Fatalf("kind = %s, want %s", p.Kind, KindPlain)
 	}
-	if len(p.Components) != 1 || p.Components[0].Type != ComponentPreformatted {
-		t.Fatalf("components = %#v, want preformatted fallback", p.Components)
+	if len(p.Components) != 2 || p.Components[0].Type != ComponentSummary || p.Components[1].Type != ComponentPreformatted {
+		t.Fatalf("components = %#v, want summary and preformatted fallback", p.Components)
 	}
 }
 
@@ -761,6 +877,32 @@ func TestPlan_SourceCodeIncludesSummaryInAutoMode(t *testing.T) {
 	}
 	if p.Components[0].Type != ComponentSummary || p.Components[1].Type != ComponentCodeBlock {
 		t.Fatalf("components = %#v, want summary then code", p.Components)
+	}
+}
+
+func TestPlan_TranscriptUsesTranscriptTitle(t *testing.T) {
+	t.Parallel()
+
+	_, p := Plan(t.Context(), []byte("Host: Welcome back.\nGuest: Thanks for having me.\nHost: Let's begin.\n"), Options{Planner: PlannerOff})
+
+	if p.Kind != KindTranscript {
+		t.Fatalf("kind = %s, want %s", p.Kind, KindTranscript)
+	}
+	if len(p.Components) != 2 || p.Components[1].Title != "Transcript" {
+		t.Fatalf("components = %#v, want Transcript preformatted component", p.Components)
+	}
+}
+
+func TestPlan_PlainIncludesSummaryInAutoMode(t *testing.T) {
+	t.Parallel()
+
+	_, p := Plan(t.Context(), []byte("plain text\nanother line\n"), Options{Planner: PlannerOff})
+
+	if p.Kind != KindPlain {
+		t.Fatalf("kind = %s, want %s", p.Kind, KindPlain)
+	}
+	if len(p.Components) != 2 || p.Components[0].Type != ComponentSummary || p.Components[1].Type != ComponentPreformatted {
+		t.Fatalf("components = %#v, want summary then input", p.Components)
 	}
 }
 
@@ -847,8 +989,8 @@ func TestPlan_StructureOverrideRequiresMatchingKind(t *testing.T) {
 			if p.Kind != KindPlain {
 				t.Fatalf("kind = %s, want %s", p.Kind, KindPlain)
 			}
-			if len(p.Components) != 1 || p.Components[0].Type != ComponentPreformatted {
-				t.Fatalf("components = %#v, want preformatted fallback", p.Components)
+			if len(p.Components) != 2 || p.Components[0].Type != ComponentSummary || p.Components[1].Type != ComponentPreformatted {
+				t.Fatalf("components = %#v, want summary and preformatted fallback", p.Components)
 			}
 		})
 	}
@@ -998,8 +1140,8 @@ func TestPlan_RejectsLLMComponentsIncompatibleWithAnalysis(t *testing.T) {
 	if p.Kind != KindPlain {
 		t.Fatalf("plan kind = %s, want deterministic fallback kind %s", p.Kind, KindPlain)
 	}
-	if len(p.Components) != 1 || p.Components[0].Type != ComponentPreformatted {
-		t.Fatalf("components = %#v, want deterministic preformatted fallback", p.Components)
+	if len(p.Components) != 2 || p.Components[0].Type != ComponentSummary || p.Components[1].Type != ComponentPreformatted {
+		t.Fatalf("components = %#v, want deterministic plain fallback", p.Components)
 	}
 	foundReason := false
 	for _, reason := range p.Reasons {
@@ -1051,11 +1193,11 @@ func TestPlan_RejectsLLMBlankComponentTitle(t *testing.T) {
 	if p.Kind != KindPlain {
 		t.Fatalf("plan kind = %s, want deterministic fallback kind %s", p.Kind, KindPlain)
 	}
-	if len(p.Components) != 1 || p.Components[0].Type != ComponentPreformatted {
-		t.Fatalf("components = %#v, want deterministic preformatted fallback", p.Components)
+	if len(p.Components) != 2 || p.Components[0].Type != ComponentSummary || p.Components[1].Type != ComponentPreformatted {
+		t.Fatalf("components = %#v, want deterministic plain fallback", p.Components)
 	}
-	if strings.TrimSpace(p.Components[0].Title) == "" {
-		t.Fatalf("fallback component title is blank: %#v", p.Components[0])
+	if strings.TrimSpace(p.Components[1].Title) == "" {
+		t.Fatalf("fallback component title is blank: %#v", p.Components[1])
 	}
 	foundReason := false
 	for _, reason := range p.Reasons {

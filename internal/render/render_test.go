@@ -37,6 +37,17 @@ func TestRender_Smoke(t *testing.T) {
 	}
 }
 
+func assertPaletteControls(t *testing.T, got string) {
+	t.Helper()
+
+	assert.Contains(t, got, `id="theme-toggle"`)
+	assert.Contains(t, got, `class="palette-switcher"`)
+	for _, palette := range []string{"sepia", "blue", "green", "rose", "catppuccin"} {
+		assert.Contains(t, got, `data-palette-choice="`+palette+`"`)
+	}
+	assert.Contains(t, got, "html-palette")
+}
+
 func TestRender_TitleFallback(t *testing.T) {
 	t.Parallel()
 
@@ -138,6 +149,7 @@ Some text with ` + "`inline code`" + `.
 	require.GreaterOrEqual(t, idxBody, 0, "<body> must be present")
 	require.Less(t, idxTheme, idxStyle, "theme script must precede <style>")
 	require.Less(t, idxStyle, idxBody, "<style> must precede <body>")
+	assertPaletteControls(t, got)
 
 	// The copy script ("Copy code to clipboard" is its unique aria-label) must
 	// appear after <body> — it is the trailing <script>.

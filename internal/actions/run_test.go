@@ -43,6 +43,207 @@ func TestRun_NoOpen(t *testing.T) {
 		"expected rendered HTML in cache file")
 }
 
+func TestRun_OutputIncludesConfiguredPalette(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	out := filepath.Join(dir, "out.html")
+	res, err := RunWithResult(Options{
+		Stdin:    strings.NewReader("# Palette\n\nBody\n"),
+		Output:   out,
+		Markdown: true,
+		Palette:  "catppuccin",
+		NoOpen:   true,
+	})
+	require.NoError(t, err)
+	require.Equal(t, out, res.Path)
+
+	html := readRenderedFile(t, out)
+	assert.Contains(t, html, `HTML_DEFAULT_PALETTE = "catppuccin"`)
+	assert.Contains(t, html, `data-palette-choice="catppuccin"`)
+	assert.Contains(t, html, `class="palette-switcher"`)
+}
+
+func TestRun_ModeLogForcesStructuredLogView(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	src := filepath.Join(dir, "notes.txt")
+	out := filepath.Join(dir, "log.html")
+	require.NoError(t, os.WriteFile(src, []byte("starting\nERROR forced view\n"), 0o644))
+
+	res, err := RunWithResult(Options{
+		File:    src,
+		Output:  out,
+		Report:  true,
+		Mode:    report.ModeOverrideLog,
+		Planner: report.PlannerOff,
+		NoOpen:  true,
+	})
+	require.NoError(t, err)
+	require.Equal(t, out, res.Path)
+
+	html := readRenderedFile(t, out)
+	assert.Contains(t, html, `<h2>Log</h2>`)
+	assert.Contains(t, html, `class="log-lines"`)
+	assert.Contains(t, html, `class="log-line log-error"`)
+	assert.NotContains(t, html, `class="text-overview"`)
+	assert.NotContains(t, html, `class="report-text"`)
+}
+
+func TestRun_ModeCodeForcesCodeOverview(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	src := filepath.Join(dir, "notes.txt")
+	out := filepath.Join(dir, "code.html")
+	require.NoError(t, os.WriteFile(src, []byte("plain text\nwithout a source lexer\n"), 0o644))
+
+	res, err := RunWithResult(Options{
+		File:    src,
+		Output:  out,
+		Report:  true,
+		Mode:    report.ModeOverrideCode,
+		Planner: report.PlannerOff,
+		NoOpen:  true,
+	})
+	require.NoError(t, err)
+	require.Equal(t, out, res.Path)
+
+	html := readRenderedFile(t, out)
+	assert.Contains(t, html, `<h2>Code</h2>`)
+	assert.Contains(t, html, `class="code-overview"`)
+	assert.Contains(t, html, `<dt>Language</dt><dd>Plain text</dd>`)
+	assert.NotContains(t, html, `class="text-overview"`)
+	assert.NotContains(t, html, `class="report-text"`)
+}
+
+func TestRun_ReportOutputCoversRepresentativeKinds(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		input    string
+		fileName string
+		want     []string
+	}{
+		{
+			name:     "markdown",
+			input:    "# Report\n\n## Section\n\nBody\n",
+			fileName: "report.md",
+			want:     []string{`class="article-overview"`, `<dt>Sections</dt><dd>1</dd>`, `<h1 id="report">Report`, `Section`},
+		},
+		{
+			name:     "json-records",
+			input:    `[{"name":"alpha","score":10},{"name":"beta","score":2}]`,
+			fileName: "records.json",
+			want:     []string{`<dt>Kind</dt><dd>json-records</dd>`, `data-report-table`, `alpha`},
+		},
+		{
+			name:     "json-object",
+			input:    `{"name":"alpha","score":10}`,
+			fileName: "object.json",
+			want:     []string{`<dt>Kind</dt><dd>json-object</dd>`, `<h2>JSON</h2>`, `class="json-overview"`, `<dt>score</dt><dd>number</dd>`, `&#34;score&#34;: 10`},
+		},
+		{
+			name:     "csv-records",
+			input:    "name,score\nalpha,10\nbeta,2\n",
+			fileName: "records.csv",
+			want:     []string{`<dt>Kind</dt><dd>csv-records</dd>`, `data-label="name">alpha`, `2 rows`},
+		},
+		{
+			name:     "tsv-records",
+			input:    "name\tscore\nalpha\t10\nbeta\t2\n",
+			fileName: "records.tsv",
+			want:     []string{`<dt>Kind</dt><dd>tsv-records</dd>`, `data-label="score">10`, `2 rows`},
+		},
+		{
+			name: "table-records",
+			input: "+----+-------+\n" +
+				"| id | name  |\n" +
+				"+----+-------+\n" +
+				"| 1  | alpha |\n" +
+				"| 2  | beta  |\n" +
+				"+----+-------+\n",
+			fileName: "mysql.out",
+			want:     []string{`<dt>Kind</dt><dd>table-records</dd>`, `data-label="name">alpha`, `2 rows`},
+		},
+		{
+			name:     "diff",
+			input:    "diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-old\n+new\n",
+			fileName: "change.patch",
+			want:     []string{`<dt>Kind</dt><dd>diff</dd>`, `class="diff-summary"`, `class="diff-view"`, `class="add">+new`},
+		},
+		{
+			name:     "source-code",
+			input:    "package main\n\nfunc main() {}\n",
+			fileName: "main.go",
+			want:     []string{`<dt>Kind</dt><dd>source-code</dd>`, `<h2>Code</h2>`, `class="code-overview"`, `<dt>Language</dt><dd>Go</dd>`, `class="chroma light"`},
+		},
+		{
+			name:     "tree-listing",
+			input:    ".\n├── cmd\n│   └── html\n└── internal\n",
+			fileName: "tree.txt",
+			want:     []string{`<dt>Kind</dt><dd>tree-listing</dd>`, `class="file-tree"`, `internal`},
+		},
+		{
+			name:     "log",
+			input:    "2026-06-16 12:00:00 ERROR stop\n2026-06-16 12:00:01 INFO ok\n",
+			fileName: "run.log",
+			want:     []string{`<dt>Kind</dt><dd>log</dd>`, `<h2>Log</h2>`, `class="log-lines"`, `class="log-line log-error"`},
+		},
+		{
+			name:     "transcript",
+			input:    "Host: Welcome back.\nGuest: Thanks for having me.\nHost: Let's begin.\n",
+			fileName: "transcript.txt",
+			want:     []string{`<dt>Kind</dt><dd>transcript</dd>`, `<h2>Transcript</h2>`, `class="transcript-turns"`, `<span class="transcript-speaker">Guest</span>`},
+		},
+		{
+			name:     "mixed",
+			input:    "Notes\n- check deploy\n\nPayload\n{\"ok\":true}\n\nERROR failed\n",
+			fileName: "mixed.txt",
+			want:     []string{`<dt>Kind</dt><dd>mixed</dd>`, `multiple weak format signals`, `>Input</button>`, `class="text-overview"`},
+		},
+		{
+			name:     "plain",
+			input:    "ordinary prose with no structural markup\nsecond line\n",
+			fileName: "notes.txt",
+			want:     []string{`<dt>Kind</dt><dd>plain</dd>`, `<h2>Input</h2>`, `class="text-overview"`, `ordinary prose`},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			dir := t.TempDir()
+			src := filepath.Join(dir, tt.fileName)
+			out := filepath.Join(dir, tt.name+".html")
+			require.NoError(t, os.WriteFile(src, []byte(tt.input), 0o644))
+
+			res, err := RunWithResult(Options{
+				File:    src,
+				Output:  out,
+				Report:  true,
+				Planner: report.PlannerOff,
+				NoOpen:  true,
+			})
+			require.NoError(t, err)
+			require.Equal(t, out, res.Path)
+
+			html := readRenderedFile(t, out)
+			assert.Contains(t, html, `<!DOCTYPE html>`)
+			assert.Contains(t, html, `class="theme-controls"`)
+			for _, palette := range []string{"sepia", "blue", "green", "rose", "catppuccin"} {
+				assert.Contains(t, html, `data-palette-choice="`+palette+`"`)
+			}
+			for _, want := range tt.want {
+				assert.Contains(t, html, want)
+			}
+		})
+	}
+}
+
 func TestRun_ImageCacheInvalidatesWhenImageChanges(t *testing.T) {
 	t.Parallel()
 
@@ -77,6 +278,12 @@ func TestRun_ImageCacheInvalidatesWhenImageChanges(t *testing.T) {
 func TestReportCacheTagIgnoresNonRenderedPlanMetadata(t *testing.T) {
 	t.Parallel()
 
+	analysis := report.Analysis{
+		Kind:       report.KindPlain,
+		Confidence: 0.62,
+		Reasons:    []string{"no high-confidence structured format detected"},
+		Stats:      report.Stats{Bytes: 10, Lines: 1},
+	}
 	base := report.ReportPlan{
 		Version:    report.PlanVersion,
 		Kind:       report.KindPlain,
@@ -100,12 +307,50 @@ func TestReportCacheTagIgnoresNonRenderedPlanMetadata(t *testing.T) {
 	metadataOnly.Components[0].Options = map[string]string{"ignored": "true"}
 
 	opts := Options{Planner: report.PlannerLLM, LLMModel: "test-model"}
-	require.Equal(t, reportCacheTag(base, opts), reportCacheTag(metadataOnly, opts))
+	require.Equal(t, reportCacheTag(analysis, base, opts), reportCacheTag(analysis, metadataOnly, opts))
+}
+
+func TestReportCacheTagIncludesRenderedAnalysisFields(t *testing.T) {
+	t.Parallel()
+
+	analysis := report.Analysis{
+		Kind:       report.KindPlain,
+		Confidence: 0.62,
+		Reasons:    []string{"no high-confidence structured format detected"},
+		Stats:      report.Stats{Bytes: 10, Lines: 1},
+	}
+	kindChanged := analysis
+	kindChanged.Kind = report.KindMixed
+	reasonChanged := analysis
+	reasonChanged.Reasons = []string{"multiple weak format signals: markdown-like prose, json-like block"}
+	statsChanged := analysis
+	statsChanged.Stats = report.Stats{Bytes: 11, Lines: 2}
+	plan := report.ReportPlan{
+		Version: report.PlanVersion,
+		Kind:    report.KindPlain,
+		Layout:  report.LayoutSinglePage,
+		Mode:    report.ModeBrief,
+		Components: []report.Component{
+			{Type: report.ComponentSummary, Source: "analysis", Title: "Summary", Options: map[string]string{}},
+			{Type: report.ComponentPreformatted, Source: "input", Title: "Input", Options: map[string]string{}},
+		},
+	}
+
+	base := reportCacheTag(analysis, plan, Options{})
+	require.NotEqual(t, base, reportCacheTag(kindChanged, plan, Options{}))
+	require.NotEqual(t, base, reportCacheTag(reasonChanged, plan, Options{}))
+	require.NotEqual(t, base, reportCacheTag(statsChanged, plan, Options{}))
 }
 
 func TestReportCacheTagIncludesRenderedPlanFields(t *testing.T) {
 	t.Parallel()
 
+	analysis := report.Analysis{
+		Kind:       report.KindPlain,
+		Confidence: 0.62,
+		Reasons:    []string{"no high-confidence structured format detected"},
+		Stats:      report.Stats{Bytes: 10, Lines: 1},
+	}
 	base := report.ReportPlan{
 		Version: report.PlanVersion,
 		Kind:    report.KindPlain,
@@ -130,12 +375,12 @@ func TestReportCacheTagIncludesRenderedPlanFields(t *testing.T) {
 		{Type: report.ComponentSummary, Source: "analysis", Title: "Summary", Options: map[string]string{}},
 	}, base.Components...)
 
-	require.NotEqual(t, reportCacheTag(base, Options{}), reportCacheTag(tabs, Options{}))
-	require.NotEqual(t, reportCacheTag(base, Options{}), reportCacheTag(slides, Options{}))
-	require.NotEqual(t, reportCacheTag(tabs, Options{}), reportCacheTag(slides, Options{}))
-	require.NotEqual(t, reportCacheTag(base, Options{}), reportCacheTag(titled, Options{}))
-	require.NotEqual(t, reportCacheTag(base, Options{}), reportCacheTag(typed, Options{}))
-	require.NotEqual(t, reportCacheTag(base, Options{}), reportCacheTag(withSummary, Options{}))
+	require.NotEqual(t, reportCacheTag(analysis, base, Options{}), reportCacheTag(analysis, tabs, Options{}))
+	require.NotEqual(t, reportCacheTag(analysis, base, Options{}), reportCacheTag(analysis, slides, Options{}))
+	require.NotEqual(t, reportCacheTag(analysis, tabs, Options{}), reportCacheTag(analysis, slides, Options{}))
+	require.NotEqual(t, reportCacheTag(analysis, base, Options{}), reportCacheTag(analysis, titled, Options{}))
+	require.NotEqual(t, reportCacheTag(analysis, base, Options{}), reportCacheTag(analysis, typed, Options{}))
+	require.NotEqual(t, reportCacheTag(analysis, base, Options{}), reportCacheTag(analysis, withSummary, Options{}))
 }
 
 func readRenderedFile(t *testing.T, path string) string {

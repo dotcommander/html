@@ -3,6 +3,8 @@ package render
 import (
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestRenderPlain(t *testing.T) {
@@ -27,6 +29,7 @@ func TestRenderPlain(t *testing.T) {
 	if !strings.Contains(out, "<title>stdin</title>") {
 		t.Errorf("expected fallback title")
 	}
+	assertPaletteControls(t, out)
 }
 
 func TestRenderPlain_Highlight(t *testing.T) {
@@ -75,6 +78,7 @@ func TestRenderPlain_Frame(t *testing.T) {
 	if !strings.Contains(out, ".term-frame {") {
 		t.Errorf("expected frame CSS to be injected when Frame is set")
 	}
+	assertPaletteControls(t, out)
 }
 
 func TestOptions_FrameCacheTag(t *testing.T) {
@@ -87,4 +91,15 @@ func TestOptions_FrameCacheTag(t *testing.T) {
 	if !strings.Contains(framed.cacheTag(), "+frame") {
 		t.Errorf("frame cacheTag should contain +frame, got %q", framed.cacheTag())
 	}
+}
+
+func TestOptions_PaletteCacheTag(t *testing.T) {
+	t.Parallel()
+
+	blue := Options{Palette: "blue"}
+	rose := Options{Palette: "rose"}
+	if blue.cacheTag() == rose.cacheTag() {
+		t.Errorf("palette must change the cache tag; both = %q", blue.cacheTag())
+	}
+	assert.Contains(t, blue.cacheTag(), "+palette:4:blue")
 }

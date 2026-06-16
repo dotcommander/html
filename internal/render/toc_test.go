@@ -128,6 +128,17 @@ func TestRender_DefaultThemeInjected(t *testing.T) {
 	assert.Contains(t, got, `HTML_DEFAULT_THEME = "dark"`)
 }
 
+func TestRender_DefaultPaletteInjected(t *testing.T) {
+	t.Parallel()
+
+	got, err := Render([]byte("# T\n\ntext\n"), Options{FallbackTitle: "f", Palette: "catppuccin"})
+	require.NoError(t, err)
+
+	assert.Contains(t, got, `HTML_DEFAULT_PALETTE = "catppuccin"`)
+	assert.Contains(t, got, `data-palette-choice="catppuccin"`)
+	assert.Contains(t, got, `data-palette-choice="blue"`)
+}
+
 // TestRender_TOCForceOnShortDoc verifies toc:true forces a TOC on a short doc.
 func TestRender_TOCForceOnShortDoc(t *testing.T) {
 	t.Parallel()
