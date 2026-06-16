@@ -111,6 +111,7 @@ func runDocumentOutput(opts Options) (Result, error) {
 		plain = resolveMode(opts.Plain, opts.Markdown, !isMarkdownExt(opts.File))
 	}
 	renderOpts := buildRenderOpts(opts, fallbackTitle, sourceName, plain)
+	addImageFingerprint(src, &renderOpts)
 	htmlDoc, err := render.Render(src, renderOpts)
 	if err != nil {
 		return Result{}, err
@@ -162,6 +163,7 @@ func runReport(opts Options) (Result, error) {
 	plain := resolveMode(opts.Plain, opts.Markdown, analysis.Kind != report.KindMarkdown)
 	renderOpts := buildRenderOpts(opts, fallbackTitle, sourceName, plain)
 	renderOpts.ReportTag = reportCacheTag(plan, opts)
+	addImageFingerprint(src, &renderOpts)
 	htmlDoc, err := render.RenderReport(src, renderOpts, analysis, plan)
 	if err != nil {
 		return Result{}, err
@@ -246,22 +248,26 @@ func readInput(opts Options) (src []byte, fallbackTitle, sourceName string, err 
 }
 
 func reportCacheTag(plan report.ReportPlan, opts Options) string {
-	b, _ := json.Marshal(plan)
-	h := sha256.New()
-	h.Write([]byte(report.PlannerPromptVersion))
-	h.Write([]byte{0})
-	h.Write(b)
-	h.Write([]byte{0})
-	h.Write([]byte(string(opts.Mode)))
-	h.Write([]byte{0})
-	h.Write([]byte(string(opts.Layout)))
-	h.Write([]byte{0})
-	h.Write([]byte(string(opts.Planner)))
-	if plan.Planner.Contributed {
-		h.Write([]byte{0})
-		h.Write([]byte(opts.LLMModel))
+	components := make([]reportCacheComponent, 0, len(plan.Components))
+	for _, c := range plan.Components {
+		components = append(components, reportCacheComponent{Type: c.Type, Title: c.Title})
 	}
+	renderPlan := struct {
+		Layout     report.Layout          `json:"layout"`
+		Components []reportCacheComponent `json:"components"`
+	}{
+		Layout:     plan.Layout,
+		Components: components,
+	}
+	b, _ := json.Marshal(renderPlan)
+	h := sha256.New()
+	h.Write(b)
 	return hex.EncodeToString(h.Sum(nil))
+}
+
+type reportCacheComponent struct {
+	Type  report.ComponentType `json:"type"`
+	Title string               `json:"title"`
 }
 
 // renderFile renders a source file. Mode is decided by extension/flags without
@@ -278,15 +284,6 @@ func renderFile(opts Options) (string, error) {
 	fallbackTitle := strings.TrimSuffix(filepath.Base(opts.File), filepath.Ext(opts.File))
 	plain := resolveMode(opts.Plain, opts.Markdown, !isMarkdownExt(opts.File))
 	renderOpts := buildRenderOpts(opts, fallbackTitle, filepath.Base(opts.File), plain)
-	fp := render.Fingerprint(renderOpts)
-
-	fresh, err := cache.Fresh(opts.File, fp)
-	if err != nil {
-		return "", err
-	}
-	if fresh && !opts.Force {
-		return cache.PathFor(opts.File)
-	}
 
 	f, err := os.Open(opts.File)
 	if err != nil {
@@ -299,6 +296,16 @@ func renderFile(opts Options) (string, error) {
 	}
 	if render.Detect(src) == render.KindBinary {
 		return "", errBinaryInput
+	}
+	addImageFingerprint(src, &renderOpts)
+	fp := render.Fingerprint(renderOpts)
+
+	fresh, err := cache.Fresh(opts.File, fp)
+	if err != nil {
+		return "", err
+	}
+	if fresh && !opts.Force {
+		return cache.PathFor(opts.File)
 	}
 
 	htmlDoc, err := render.Render(src, renderOpts)
@@ -326,6 +333,7 @@ func renderStdin(opts Options) (string, error) {
 	}
 	plain := resolveMode(opts.Plain, opts.Markdown, kind != render.KindMarkdown)
 	renderOpts := buildRenderOpts(opts, stdinTitle(opts.Title), "", plain)
+	addImageFingerprint(src, &renderOpts)
 	fp := render.Fingerprint(renderOpts)
 
 	fresh, err := cache.FreshContent(src, fp)
@@ -369,10 +377,14 @@ func isMarkdownExt(path string) bool {
 // buildRenderOpts assembles render.Options from the invocation options, the
 // resolved fallback title, and the resolved plain/Markdown mode.
 func buildRenderOpts(opts Options, fallbackTitle, sourceName string, plain bool) render.Options {
+	sourceDir := ""
+	if opts.File != "" {
+		sourceDir = filepath.Dir(opts.File)
+	}
 	return render.Options{
 		FallbackTitle: fallbackTitle,
 		SourceName:    sourceName,
-		SourceDir:     filepath.Dir(opts.File),
+		SourceDir:     sourceDir,
 		Lang:          opts.Lang,
 		Safe:          opts.Safe,
 		MaxWidth:      opts.MaxWidth,
@@ -380,6 +392,13 @@ func buildRenderOpts(opts Options, fallbackTitle, sourceName string, plain bool)
 		TOC:           opts.TOC,
 		Plain:         plain,
 	}
+}
+
+func addImageFingerprint(src []byte, opts *render.Options) {
+	if opts.Plain || opts.SourceDir == "" {
+		return
+	}
+	opts.ImageFingerprint = render.ImageDependencyFingerprint(src, opts.SourceDir)
 }
 
 // stdinTitle returns the page title for piped input, defaulting to "stdin".

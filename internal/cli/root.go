@@ -7,6 +7,7 @@ import (
 
 	"github.com/dotcommander/html/internal/actions"
 	"github.com/dotcommander/html/internal/config"
+	"github.com/dotcommander/html/internal/report"
 	"github.com/spf13/cobra"
 )
 
@@ -14,7 +15,15 @@ func Execute() error { return newRootCmd().Execute() }
 
 func newRootCmd() *cobra.Command {
 	var noOpen, force, safe, plain, markdown bool
+	var plan, stdout bool
 	var title, lang, output string
+	reportDefaults := report.DefaultOptions()
+	mode := reportDefaults.Mode
+	layout := reportDefaults.Layout
+	planner := reportDefaults.Planner
+	llmURL := reportDefaults.LLMURL
+	llmModel := reportDefaults.LLMModel
+	llmTimeout := reportDefaults.LLMTimeout
 	cmd := &cobra.Command{
 		Use:   "html [file]",
 		Short: "Render Markdown or piped text to a clean HTML page and open it in the browser",
@@ -28,6 +37,28 @@ func newRootCmd() *cobra.Command {
 			if plain && markdown {
 				return fmt.Errorf("--plain and --markdown are mutually exclusive")
 			}
+			reportRequested := plan ||
+				cmd.Flags().Changed("mode") ||
+				cmd.Flags().Changed("layout") ||
+				cmd.Flags().Changed("planner") ||
+				cmd.Flags().Changed("llm-url") ||
+				cmd.Flags().Changed("llm-model") ||
+				cmd.Flags().Changed("llm-timeout")
+			if plain && reportRequested {
+				return fmt.Errorf("--plain and report flags are mutually exclusive")
+			}
+			if markdown && reportRequested {
+				return fmt.Errorf("--markdown and report flags are mutually exclusive")
+			}
+			if plan && output != "" {
+				return fmt.Errorf("--plan and --output are mutually exclusive")
+			}
+			if stdout && output != "" {
+				return fmt.Errorf("--stdout and --output are mutually exclusive")
+			}
+			if err := validateReportFlags(mode, layout, planner); err != nil {
+				return err
+			}
 			// Optional user preferences; a missing file yields a zero Config and
 			// reproduces current behavior. A malformed file errors here.
 			cfg, err := config.Load()
@@ -35,18 +66,28 @@ func newRootCmd() *cobra.Command {
 				return err
 			}
 			opts := actions.Options{
-				NoOpen:   noOpen,
-				Force:    force,
-				Safe:     safe,
-				Plain:    plain,
-				Markdown: markdown,
-				Title:    title,
-				Lang:     lang,
-				OpenCmd:  cfg.OpenCommand,
-				MaxWidth: cfg.MaxWidth,
-				Theme:    cfg.DefaultTheme,
-				TOC:      cfg.TOC,
-				Output:   output,
+				Context:    cmd.Context(),
+				NoOpen:     noOpen,
+				Force:      force,
+				Safe:       safe,
+				Plain:      plain,
+				Markdown:   markdown,
+				Title:      title,
+				Lang:       lang,
+				OpenCmd:    cfg.OpenCommand,
+				MaxWidth:   cfg.MaxWidth,
+				Theme:      cfg.DefaultTheme,
+				TOC:        cfg.TOC,
+				Output:     output,
+				Report:     reportRequested,
+				Plan:       plan,
+				Stdout:     stdout,
+				Mode:       mode,
+				Layout:     layout,
+				Planner:    planner,
+				LLMURL:     llmURL,
+				LLMModel:   llmModel,
+				LLMTimeout: llmTimeout,
 			}
 			switch {
 			case len(args) == 1:
@@ -57,36 +98,13 @@ func newRootCmd() *cobra.Command {
 				return fmt.Errorf("no input: provide a file path or pipe data (e.g. `tree -d | html`)")
 			}
 
-			path, err := actions.Run(opts)
-			if err != nil {
-				return err
+			res, err := actions.RunWithResult(opts)
+			if res.Stdout != "" {
+				fmt.Fprint(cmd.OutOrStdout(), res.Stdout)
+			} else if res.Path != "" {
+				fmt.Fprintln(cmd.OutOrStdout(), res.Path)
 			}
-
-			switch opts.Output {
-			case "":
-				if path != "" {
-					fmt.Fprintln(cmd.OutOrStdout(), path)
-				}
-			case "-":
-				html, err := os.ReadFile(path)
-				if err != nil {
-					return fmt.Errorf("read cache: %w", err)
-				}
-				_, err = cmd.OutOrStdout().Write(html)
-				if err != nil {
-					return fmt.Errorf("write stdout: %w", err)
-				}
-			default:
-				html, err := os.ReadFile(path)
-				if err != nil {
-					return fmt.Errorf("read cache: %w", err)
-				}
-				if err := os.WriteFile(opts.Output, html, 0o644); err != nil {
-					return fmt.Errorf("write output: %w", err)
-				}
-				fmt.Fprintln(cmd.OutOrStdout(), opts.Output)
-			}
-			return nil
+			return err
 		},
 	}
 	cmd.Flags().BoolVarP(&noOpen, "no-open", "n", false, "render only; print the cache path without opening the browser")
@@ -96,8 +114,25 @@ func newRootCmd() *cobra.Command {
 	cmd.Flags().BoolVarP(&markdown, "markdown", "m", false, "render input as Markdown (overrides stdin auto-detection)")
 	cmd.Flags().StringVarP(&title, "title", "t", "stdin", "page title for piped input")
 	cmd.Flags().StringVarP(&lang, "lang", "l", "", "syntax-highlight language for plain mode (e.g. go, json; \"text\" = no highlighting)")
-	cmd.Flags().StringVarP(&output, "output", "o", "", "write rendered HTML to a path (\"-\" for stdout) instead of caching and opening")
+	cmd.Flags().StringVarP(&output, "output", "o", "", "write the final HTML document to a stable path (\"-\" writes stdout)")
+	cmd.Flags().BoolVar(&plan, "plan", false, "print the report plan JSON without rendering")
+	cmd.Flags().BoolVar(&stdout, "stdout", false, "write the final HTML document to stdout without opening")
+	cmd.Flags().Var((*modeValue)(&mode), "mode", "report mode: auto, article, table, cards, diff, log, code, tree")
+	cmd.Flags().Var((*layoutValue)(&layout), "layout", "report layout: auto, single, tabs")
+	cmd.Flags().Var((*plannerValue)(&planner), "planner", "planner policy: off, auto, llm")
+	cmd.Flags().StringVar(&llmURL, "llm-url", reportDefaults.LLMURL, "OpenAI-compatible chat completions URL for the optional planner")
+	cmd.Flags().StringVar(&llmModel, "llm-model", reportDefaults.LLMModel, "model name for the optional planner")
+	cmd.Flags().StringVar(&llmTimeout, "llm-timeout", reportDefaults.LLMTimeout, "timeout for the optional planner")
+	mustMarkHidden(cmd, "llm-url")
+	mustMarkHidden(cmd, "llm-model")
+	mustMarkHidden(cmd, "llm-timeout")
 	return cmd
+}
+
+func mustMarkHidden(cmd *cobra.Command, name string) {
+	if err := cmd.Flags().MarkHidden(name); err != nil {
+		panic(fmt.Sprintf("hide flag %s: %v", name, err))
+	}
 }
 
 // isPiped reports whether r carries piped/redirected data rather than an
@@ -113,4 +148,62 @@ func isPiped(r io.Reader) bool {
 		return false
 	}
 	return info.Mode()&os.ModeCharDevice == 0
+}
+
+type modeValue report.ModeOverride
+
+func (v *modeValue) String() string { return string(*v) }
+func (v *modeValue) Type() string   { return "mode" }
+func (v *modeValue) Set(s string) error {
+	m := report.ModeOverride(s)
+	switch m {
+	case report.ModeOverrideAuto, report.ModeOverrideArticle, report.ModeOverrideTable, report.ModeOverrideCards, report.ModeOverrideDiff, report.ModeOverrideLog, report.ModeOverrideCode, report.ModeOverrideTree:
+		*v = modeValue(m)
+		return nil
+	default:
+		return fmt.Errorf("unsupported mode %q", s)
+	}
+}
+
+type layoutValue report.LayoutOverride
+
+func (v *layoutValue) String() string { return string(*v) }
+func (v *layoutValue) Type() string   { return "layout" }
+func (v *layoutValue) Set(s string) error {
+	l := report.LayoutOverride(s)
+	switch l {
+	case report.LayoutOverrideAuto, report.LayoutOverrideSingle, report.LayoutOverrideTabs:
+		*v = layoutValue(l)
+		return nil
+	default:
+		return fmt.Errorf("unsupported layout %q", s)
+	}
+}
+
+type plannerValue report.PlannerMode
+
+func (v *plannerValue) String() string { return string(*v) }
+func (v *plannerValue) Type() string   { return "planner" }
+func (v *plannerValue) Set(s string) error {
+	p := report.PlannerMode(s)
+	switch p {
+	case report.PlannerAuto, report.PlannerOff, report.PlannerLLM:
+		*v = plannerValue(p)
+		return nil
+	default:
+		return fmt.Errorf("unsupported planner %q", s)
+	}
+}
+
+func validateReportFlags(mode report.ModeOverride, layout report.LayoutOverride, planner report.PlannerMode) error {
+	if err := (*modeValue)(&mode).Set(string(mode)); err != nil {
+		return err
+	}
+	if err := (*layoutValue)(&layout).Set(string(layout)); err != nil {
+		return err
+	}
+	if err := (*plannerValue)(&planner).Set(string(planner)); err != nil {
+		return err
+	}
+	return nil
 }

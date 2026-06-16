@@ -28,7 +28,7 @@ const (
 // Detect classifies src as binary, Markdown, or plain text. Precedence:
 //  1. binary (a NUL byte, or >maxControlRatio non-text bytes in the scan window);
 //  2. Markdown — but ONLY on a high-confidence structural signal (fenced code,
-//     a GFM table, or a setext "=" heading);
+//     a GFM table, a GFM task list, or a setext heading);
 //  3. plain text (the default).
 //
 // Markdown detection is deliberately strong-signal-only. Every weaker inline cue
@@ -86,13 +86,17 @@ var (
 	reFence = regexp.MustCompile("(?m)^[ \t]*(```|~~~)")
 	// A GFM table delimiter row: pipes + dashes/colons only.
 	reTableDelim = regexp.MustCompile(`^\s*\|?[ :|-]*\|[ :|-]*$`)
+	// A GFM task-list item. The marker is specific enough to avoid ordinary
+	// bullets, command output, and prose lists.
+	reTaskList = regexp.MustCompile(`(?m)^[ \t]{0,3}[-+*][ \t]+\[[ xX]\][ \t]+`)
 )
 
 // looksLikeMarkdown reports a high-confidence Markdown structure in the (already
-// known-text) window: a fenced code block, a GFM table, or a setext "=" heading.
+// known-text) window: a fenced code block, a GFM table, a GFM task list, or a
+// setext heading.
 func looksLikeMarkdown(window []byte) bool {
 	scan := limitLines(window, detectScanLines)
-	return reFence.Match(scan) || hasTable(scan) || hasSetextEq(scan)
+	return reFence.Match(scan) || hasTable(scan) || reTaskList.Match(scan) || hasSetextEq(scan)
 }
 
 // hasTable reports a GFM table: a delimiter row (pipes + dashes) with at least
@@ -109,14 +113,17 @@ func hasTable(scan []byte) bool {
 	return false
 }
 
-// hasSetextEq reports a setext heading underlined with "=" (e.g. "Title\n=====").
-// Only "=" counts; a "-" underline is too easily a plain-text divider.
+// hasSetextEq reports a setext heading underline. A "-" underline needs a blank
+// or EOF after it so plain command-output dividers stay plain.
 func hasSetextEq(scan []byte) bool {
 	lines := bytes.Split(scan, []byte("\n"))
 	for i := 1; i < len(lines); i++ {
 		prev := bytes.TrimSpace(lines[i-1])
 		cur := bytes.TrimSpace(lines[i])
-		if len(prev) > 0 && len(cur) > 0 && allByte(cur, '=') {
+		if len(prev) == 0 || len(cur) == 0 {
+			continue
+		}
+		if allByte(cur, '=') || allByte(cur, '-') && (i+1 == len(lines) || len(bytes.TrimSpace(lines[i+1])) == 0) {
 			return true
 		}
 	}

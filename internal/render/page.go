@@ -101,8 +101,11 @@ func wrapPage(title, body string, opts Options) string {
   <script>
 %s
   </script>
+  <script>
+%s
+  </script>
 </body>
 </html>
-`, themeDefault, themeJS(), title, baseCSS(), highlightCSS(), widthOverride, body, copyJS(), headingsJS())
+`, themeDefault, themeJS(), title, baseCSS(), highlightCSS(), widthOverride, body, copyJS(), headingsJS(), reportJS())
 	return w.String()
 }

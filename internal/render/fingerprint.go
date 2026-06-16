@@ -9,9 +9,10 @@ import (
 )
 
 // renderSchemaVersion is bumped whenever renderer behavior changes in a way the
-// embedded asset bytes do not capture (goldmark options, wrapPage markup, chroma
-// theme selection). Bumping it invalidates every cached page.
-const renderSchemaVersion = "2"
+// embedded asset bytes do not capture (goldmark options, wrapPage markup, report
+// component semantics, chroma theme selection). Bumping it invalidates every
+// cached page.
+const renderSchemaVersion = "53"
 
 // fingerprintOnce memoizes the renderer fingerprint — immutable per process.
 var fingerprintOnce = sync.OnceValue(func() string {

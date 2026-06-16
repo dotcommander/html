@@ -261,13 +261,19 @@ body::before {
 
 .report-filter {
   width: 100%;
-  margin: 0 0 0.75rem;
+  margin: 0;
   padding: 0.5rem 0.65rem;
   color: var(--text);
   background: var(--paper);
   border: 1px solid var(--border);
   border-radius: 6px;
   font: 0.95rem ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.report-filter-status {
+  margin: 0.35rem 0 0.75rem;
+  color: var(--muted);
+  font: 0.78rem ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 .report-table {
@@ -297,6 +303,21 @@ body::before {
   font: inherit;
   font-weight: 700;
   cursor: pointer;
+}
+
+.report-table th[aria-sort] button::after {
+  display: inline-block;
+  min-width: 1em;
+  margin-left: 0.35em;
+  color: var(--accent);
+}
+
+.report-table th[aria-sort="ascending"] button::after {
+  content: "▲";
+}
+
+.report-table th[aria-sort="descending"] button::after {
+  content: "▼";
 }
 
 .record-cards {
@@ -377,6 +398,12 @@ body::before {
 .report-tab-list button[aria-selected="true"] {
   color: var(--accent);
   border-color: var(--accent);
+}
+
+.report-tab-list button:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 /* ── Links ────────────────────────────────────────────────────────────────── */
