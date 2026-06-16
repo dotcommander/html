@@ -102,7 +102,7 @@ func componentsFor(a Analysis) (Kind, Mode, []Component) {
 		return a.Kind, ModeDataBrowser, []Component{{Type: ComponentSummary, Source: "analysis", Title: "Summary", Options: map[string]string{}}, {Type: component, Source: "records", Title: title, Options: map[string]string{"primary": "true"}}}
 	case KindJSONObject:
 		return a.Kind, ModeDataBrowser, []Component{{Type: ComponentSummary, Source: "analysis", Title: "Summary", Options: map[string]string{}}, {Type: ComponentRawJSON, Source: "input", Title: "JSON", Options: map[string]string{}}}
-	case KindCSVRecords, KindTSVRecords:
+	case KindCSVRecords, KindTSVRecords, KindTableRecords:
 		return a.Kind, ModeDataBrowser, []Component{{Type: ComponentSummary, Source: "analysis", Title: "Summary", Options: map[string]string{}}, {Type: ComponentDataTable, Source: "records", Title: "Records", Options: map[string]string{"primary": "true"}}}
 	case KindDiff:
 		return a.Kind, ModeReview, []Component{{Type: ComponentSummary, Source: "analysis", Title: "Summary", Options: map[string]string{}}, {Type: ComponentDiffView, Source: "input", Title: "Diff", Options: map[string]string{}}}
@@ -110,9 +110,13 @@ func componentsFor(a Analysis) (Kind, Mode, []Component) {
 		return a.Kind, ModeCode, []Component{{Type: ComponentSummary, Source: "analysis", Title: "Summary", Options: map[string]string{}}, {Type: ComponentCodeBlock, Source: "input", Title: "Code", Options: map[string]string{}}}
 	case KindTreeListing:
 		return a.Kind, ModeCode, []Component{{Type: ComponentSummary, Source: "analysis", Title: "Summary", Options: map[string]string{}}, {Type: ComponentFileTree, Source: "input", Title: "Files", Options: map[string]string{}}}
-	case KindLog, KindTranscript:
+	case KindLog:
 		return a.Kind, ModeConsole, []Component{{Type: ComponentSummary, Source: "analysis", Title: "Summary", Options: map[string]string{}}, {Type: ComponentPreformatted, Source: "input", Title: "Log", Options: map[string]string{}}}
+	case KindTranscript:
+		return a.Kind, ModeConsole, []Component{{Type: ComponentSummary, Source: "analysis", Title: "Summary", Options: map[string]string{}}, {Type: ComponentPreformatted, Source: "input", Title: "Transcript", Options: map[string]string{}}}
 	case KindMixed:
+		return a.Kind, ModeBrief, []Component{{Type: ComponentSummary, Source: "analysis", Title: "Summary", Options: map[string]string{}}, {Type: ComponentPreformatted, Source: "input", Title: "Input", Options: map[string]string{}}}
+	case KindPlain:
 		return a.Kind, ModeBrief, []Component{{Type: ComponentSummary, Source: "analysis", Title: "Summary", Options: map[string]string{}}, {Type: ComponentPreformatted, Source: "input", Title: "Input", Options: map[string]string{}}}
 	default:
 		return a.Kind, ModeBrief, []Component{{Type: ComponentPreformatted, Source: "input", Title: "Input", Options: map[string]string{}}}
@@ -156,7 +160,7 @@ func overrideComponents(mode ModeOverride, a Analysis) (Kind, Mode, []Component)
 }
 
 func hasRecordRows(kind Kind) bool {
-	return kind == KindJSONRecords || kind == KindCSVRecords || kind == KindTSVRecords
+	return kind == KindJSONRecords || kind == KindCSVRecords || kind == KindTSVRecords || kind == KindTableRecords
 }
 
 func fallbackPlan(a Analysis, opts Options, reason string) ReportPlan {
@@ -331,13 +335,13 @@ func llmUserPrompt(analysis Analysis, fallback ReportPlan, summary string, src [
 	if len(sample) > 8000 {
 		sample = sample[:8000]
 	}
-	return "Allowed kind: markdown, json-records, json-object, csv-records, tsv-records, diff, source-code, tree-listing, log, transcript, mixed, plain, binary.\n" +
+	return "Allowed kind: markdown, json-records, json-object, csv-records, tsv-records, table-records, diff, source-code, tree-listing, log, transcript, mixed, plain, binary.\n" +
 		"Allowed layout: single-page, tabbed-page, slides-page.\n" +
 		"Allowed mode: reader, data-browser, review, console, code, brief.\n" +
 		"Allowed component type: article, preformatted, code-block, data-table, record-cards, diff-view, file-tree, summary, raw-json.\n" +
 		"Allowed component source: input, analysis, records.\n" +
 		"Component source compatibility: summary uses analysis; data-table and record-cards use records; every other component uses input.\n" +
-		"Component compatibility: article only markdown; data-table and record-cards only json-records/csv-records/tsv-records; raw-json only json-object; diff-view only diff; file-tree only tree-listing; code-block, summary, and preformatted any kind.\n" +
+		"Component compatibility: article only markdown; data-table and record-cards only json-records/csv-records/tsv-records/table-records; raw-json only json-object; diff-view only diff; file-tree only tree-listing; code-block, summary, and preformatted any kind.\n" +
 		"Use version 1 and at least one component. Prefer the deterministic plan unless the input is genuinely mixed or ambiguous.\n" +
 		"Analysis summary: " + summary + "\n" +
 		"Deterministic plan: " + fallback.Digest() + "\n" +

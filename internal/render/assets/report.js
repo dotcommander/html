@@ -54,6 +54,9 @@
   document.querySelectorAll("[data-report-slides]").forEach((deck) => {
     const slides = Array.from(deck.querySelectorAll(".report-slide"));
     if (slides.length <= 1) return;
+    const prev = deck.querySelector("[data-slide-prev]");
+    const nextButton = deck.querySelector("[data-slide-next]");
+    const status = deck.querySelector("[data-slide-status]");
 
     let index = 0;
     const show = (next) => {
@@ -63,12 +66,28 @@
         slide.hidden = !active;
         slide.setAttribute("aria-current", active ? "true" : "false");
       });
+      if (prev) {
+        prev.disabled = index === 0;
+      }
+      if (nextButton) {
+        nextButton.disabled = index === slides.length - 1;
+      }
+      if (status) {
+        status.textContent = `${index + 1} / ${slides.length}`;
+      }
       const active = slides[index];
       active.tabIndex = -1;
       active.focus({ preventScroll: true });
     };
 
     show(0);
+
+    if (prev) {
+      prev.addEventListener("click", () => show(index - 1));
+    }
+    if (nextButton) {
+      nextButton.addEventListener("click", () => show(index + 1));
+    }
 
     document.addEventListener("keydown", (event) => {
       if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) {
@@ -109,6 +128,7 @@
     const input = wrap.querySelector(".report-filter");
     const status = wrap.querySelector(".report-filter-status");
     const table = wrap.querySelector("[data-report-table]");
+    const mobileSort = wrap.querySelector(".report-mobile-sort select");
     if (!table) return;
     const tbody = table.tBodies[0];
     if (!tbody) return;
@@ -130,22 +150,58 @@
     }
     updateStatus();
 
-    Array.from(table.tHead.rows[0].cells).forEach((cell, index) => {
+    const headers = Array.from(table.tHead.rows[0].cells);
+    const syncSortLabels = () => {
+      headers.forEach((cell, index) => {
+        const button = cell.querySelector("button");
+        if (!button) return;
+        const label = button.dataset.sortLabel || button.textContent.trim() || `column ${index + 1}`;
+        const nextDirection = cell.getAttribute("aria-sort") === "ascending" ? "descending" : "ascending";
+        button.setAttribute("aria-label", `Sort by ${label} ${nextDirection}`);
+      });
+      if (mobileSort) {
+        const activeIndex = headers.findIndex((cell) => cell.hasAttribute("aria-sort"));
+        if (activeIndex < 0) {
+          mobileSort.value = "";
+          return;
+        }
+        mobileSort.value = `${activeIndex}:${headers[activeIndex].getAttribute("aria-sort")}`;
+      }
+    };
+    syncSortLabels();
+
+    const sortBy = (index, asc) => {
+      const rows = Array.from(tbody.rows);
+      rows.sort((a, b) => {
+        const av = a.cells[index]?.textContent || "";
+        const bv = b.cells[index]?.textContent || "";
+        const cmp = av.localeCompare(bv, undefined, { numeric: true, sensitivity: "base" });
+        return asc ? cmp : -cmp;
+      });
+      headers.forEach((header) => header.removeAttribute("aria-sort"));
+      if (headers[index]) {
+        headers[index].setAttribute("aria-sort", asc ? "ascending" : "descending");
+      }
+      syncSortLabels();
+      rows.forEach((row) => tbody.appendChild(row));
+    };
+
+    headers.forEach((cell, index) => {
       const button = cell.querySelector("button");
       if (!button) return;
       button.addEventListener("click", () => {
         const asc = cell.getAttribute("aria-sort") !== "ascending";
-        const rows = Array.from(tbody.rows);
-        rows.sort((a, b) => {
-          const av = a.cells[index]?.textContent || "";
-          const bv = b.cells[index]?.textContent || "";
-          const cmp = av.localeCompare(bv, undefined, { numeric: true, sensitivity: "base" });
-          return asc ? cmp : -cmp;
-        });
-        Array.from(table.tHead.rows[0].cells).forEach((header) => header.removeAttribute("aria-sort"));
-        cell.setAttribute("aria-sort", asc ? "ascending" : "descending");
-        rows.forEach((row) => tbody.appendChild(row));
+        sortBy(index, asc);
       });
     });
+
+    if (mobileSort) {
+      mobileSort.addEventListener("change", () => {
+        const [index, direction] = mobileSort.value.split(":");
+        const column = Number(index);
+        if (!Number.isInteger(column) || column < 0 || column >= headers.length) return;
+        sortBy(column, direction !== "descending");
+      });
+    }
   });
 })();

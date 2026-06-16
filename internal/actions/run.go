@@ -167,7 +167,7 @@ func runReport(opts Options) (Result, error) {
 	}
 	plain := resolveMode(opts.Plain, opts.Markdown, analysis.Kind != report.KindMarkdown)
 	renderOpts := buildRenderOpts(opts, fallbackTitle, sourceName, plain)
-	renderOpts.ReportTag = reportCacheTag(plan, opts)
+	renderOpts.ReportTag = reportCacheTag(analysis, plan, opts)
 	addImageFingerprint(src, &renderOpts)
 	htmlDoc, err := render.RenderReport(src, renderOpts, analysis, plan)
 	if err != nil {
@@ -252,15 +252,17 @@ func readInput(opts Options) (src []byte, fallbackTitle, sourceName string, err 
 	return src, strings.TrimSuffix(filepath.Base(opts.File), filepath.Ext(opts.File)), filepath.Base(opts.File), nil
 }
 
-func reportCacheTag(plan report.ReportPlan, opts Options) string {
+func reportCacheTag(analysis report.Analysis, plan report.ReportPlan, opts Options) string {
 	components := make([]reportCacheComponent, 0, len(plan.Components))
 	for _, c := range plan.Components {
 		components = append(components, reportCacheComponent{Type: c.Type, Title: c.Title})
 	}
 	renderPlan := struct {
+		Analysis   reportCacheAnalysis    `json:"analysis"`
 		Layout     report.Layout          `json:"layout"`
 		Components []reportCacheComponent `json:"components"`
 	}{
+		Analysis:   reportCacheAnalysis{Kind: analysis.Kind, Confidence: analysis.Confidence, Reasons: analysis.Reasons, Stats: analysis.Stats},
 		Layout:     plan.Layout,
 		Components: components,
 	}
@@ -273,6 +275,13 @@ func reportCacheTag(plan report.ReportPlan, opts Options) string {
 type reportCacheComponent struct {
 	Type  report.ComponentType `json:"type"`
 	Title string               `json:"title"`
+}
+
+type reportCacheAnalysis struct {
+	Kind       report.Kind  `json:"kind"`
+	Confidence float64      `json:"confidence"`
+	Reasons    []string     `json:"reasons"`
+	Stats      report.Stats `json:"stats"`
 }
 
 // renderFile renders a source file. Mode is decided by extension/flags without

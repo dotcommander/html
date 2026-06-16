@@ -3,12 +3,18 @@
 (function () {
   "use strict";
 
-  var KEY = "html-theme";
+  var THEME_KEY = "html-theme";
+  var PALETTE_KEY = "html-palette";
+  var PALETTES = ["sepia", "blue", "green", "rose", "catppuccin"];
   var root = document.documentElement;
 
-  function resolve() {
+  function isPalette(value) {
+    return PALETTES.indexOf(value) !== -1;
+  }
+
+  function resolveTheme() {
     try {
-      var s = localStorage.getItem(KEY);
+      var s = localStorage.getItem(THEME_KEY);
       if (s === "light" || s === "dark") return s;
     } catch (e) {}
     // Optional config default (window.HTML_DEFAULT_THEME) takes precedence over
@@ -20,33 +26,65 @@
       : "light";
   }
 
-  function apply(t) {
+  function resolvePalette() {
+    try {
+      var s = localStorage.getItem(PALETTE_KEY);
+      if (isPalette(s)) return s;
+    } catch (e) {}
+    var d = window.HTML_DEFAULT_PALETTE;
+    if (isPalette(d)) return d;
+    return "sepia";
+  }
+
+  function applyTheme(t) {
     root.dataset.theme = t;
   }
 
+  function applyPalette(p) {
+    root.dataset.palette = isPalette(p) ? p : "sepia";
+  }
+
   // Runs synchronously during <head> parse — sets data-theme before first paint.
-  apply(resolve());
+  applyTheme(resolveTheme());
+  applyPalette(resolvePalette());
 
   document.addEventListener("DOMContentLoaded", function () {
     var btn = document.getElementById("theme-toggle");
-    if (!btn) return;
+    var paletteButtons = document.querySelectorAll("[data-palette-choice]");
 
     function sync() {
-      var dark = root.dataset.theme === "dark";
-      btn.setAttribute("aria-pressed", String(dark));
-      btn.textContent = dark ? "☀" : "☾"; // ☀ / ☾
-      btn.title = dark ? "Switch to light theme" : "Switch to dark theme";
+      if (btn) {
+        var dark = root.dataset.theme === "dark";
+        btn.setAttribute("aria-pressed", String(dark));
+        btn.textContent = dark ? "☀" : "☾"; // ☀ / ☾
+        btn.title = dark ? "Switch to light theme" : "Switch to dark theme";
+      }
+      paletteButtons.forEach(function (paletteButton) {
+        var selected = paletteButton.dataset.paletteChoice === root.dataset.palette;
+        paletteButton.setAttribute("aria-pressed", String(selected));
+      });
     }
 
     sync();
 
-    btn.addEventListener("click", function () {
+    if (btn) btn.addEventListener("click", function () {
       var next = root.dataset.theme === "dark" ? "light" : "dark";
-      apply(next);
+      applyTheme(next);
       try {
-        localStorage.setItem(KEY, next);
+        localStorage.setItem(THEME_KEY, next);
       } catch (e) {}
       sync();
+    });
+
+    paletteButtons.forEach(function (paletteButton) {
+      paletteButton.addEventListener("click", function () {
+        var next = paletteButton.dataset.paletteChoice;
+        applyPalette(next);
+        try {
+          localStorage.setItem(PALETTE_KEY, root.dataset.palette);
+        } catch (e) {}
+        sync();
+      });
     });
   });
 })();

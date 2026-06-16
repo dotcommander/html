@@ -15,11 +15,11 @@ import (
 // Config holds optional user preferences. A zero value (or absent key) means
 // "use the built-in default".
 type Config struct {
-	OpenCommand  string `json:"open_command"`  // launcher command (e.g. "firefox"); "" = OS default
-	MaxWidth     string `json:"max_width"`     // reader column CSS max-width (e.g. "48rem"); "" = default
-	DefaultTheme string `json:"default_theme"` // "light" | "dark" | "auto"; "" = auto (system)
+	OpenCommand    string `json:"open_command"`    // launcher command (e.g. "firefox"); "" = OS default
+	MaxWidth       string `json:"max_width"`       // reader column CSS max-width (e.g. "48rem"); "" = default
+	DefaultTheme   string `json:"default_theme"`   // "light" | "dark" | "auto"; "" = auto (system)
 	DefaultPalette string `json:"default_palette"` // "sepia" | "blue" | "green" | "rose" | "catppuccin"; "" = sepia
-	TOC          *bool  `json:"toc"`           // override automatic TOC; nil = automatic
+	TOC            *bool  `json:"toc"`             // override automatic TOC; nil = automatic
 }
 
 // maxConfigBytes caps the config read; a config file is tiny, so anything past

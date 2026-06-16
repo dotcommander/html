@@ -9,25 +9,26 @@ import (
 
 const (
 	PlanVersion          = 1
-	PlannerPromptVersion = "report-plan-v7"
+	PlannerPromptVersion = "report-plan-v8"
 )
 
 type Kind string
 
 const (
-	KindMarkdown    Kind = "markdown"
-	KindJSONRecords Kind = "json-records"
-	KindJSONObject  Kind = "json-object"
-	KindCSVRecords  Kind = "csv-records"
-	KindTSVRecords  Kind = "tsv-records"
-	KindDiff        Kind = "diff"
-	KindSourceCode  Kind = "source-code"
-	KindTreeListing Kind = "tree-listing"
-	KindLog         Kind = "log"
-	KindTranscript  Kind = "transcript"
-	KindMixed       Kind = "mixed"
-	KindPlain       Kind = "plain"
-	KindBinary      Kind = "binary"
+	KindMarkdown     Kind = "markdown"
+	KindJSONRecords  Kind = "json-records"
+	KindJSONObject   Kind = "json-object"
+	KindCSVRecords   Kind = "csv-records"
+	KindTSVRecords   Kind = "tsv-records"
+	KindTableRecords Kind = "table-records"
+	KindDiff         Kind = "diff"
+	KindSourceCode   Kind = "source-code"
+	KindTreeListing  Kind = "tree-listing"
+	KindLog          Kind = "log"
+	KindTranscript   Kind = "transcript"
+	KindMixed        Kind = "mixed"
+	KindPlain        Kind = "plain"
+	KindBinary       Kind = "binary"
 )
 
 type Layout string
@@ -217,7 +218,7 @@ func ValidatePlan(p ReportPlan) (ReportPlan, error) {
 
 func validKind(v Kind) bool {
 	switch v {
-	case KindMarkdown, KindJSONRecords, KindJSONObject, KindCSVRecords, KindTSVRecords, KindDiff, KindSourceCode, KindTreeListing, KindLog, KindTranscript, KindMixed, KindPlain, KindBinary:
+	case KindMarkdown, KindJSONRecords, KindJSONObject, KindCSVRecords, KindTSVRecords, KindTableRecords, KindDiff, KindSourceCode, KindTreeListing, KindLog, KindTranscript, KindMixed, KindPlain, KindBinary:
 		return true
 	}
 	return false
@@ -252,7 +253,7 @@ func componentAllowedForKind(kind Kind, typ ComponentType) bool {
 	case ComponentCodeBlock:
 		return true
 	case ComponentDataTable, ComponentRecordCards:
-		return kind == KindJSONRecords || kind == KindCSVRecords || kind == KindTSVRecords
+		return kind == KindJSONRecords || kind == KindCSVRecords || kind == KindTSVRecords || kind == KindTableRecords
 	case ComponentDiffView:
 		return kind == KindDiff
 	case ComponentFileTree:

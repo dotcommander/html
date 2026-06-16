@@ -68,6 +68,10 @@ func wrapPage(title, body string, opts Options) string {
 	if opts.Theme == "light" || opts.Theme == "dark" {
 		themeDefault = fmt.Sprintf("window.HTML_DEFAULT_THEME = %q;\n", opts.Theme)
 	}
+	paletteDefault := ""
+	if validPalette(opts.Palette) {
+		paletteDefault = fmt.Sprintf("window.HTML_DEFAULT_PALETTE = %q;\n", opts.Palette)
+	}
 	// widthOverride is appended last in the <style> block; its value is
 	// validated upstream (config.maxWidthRe) to a plain CSS length.
 	widthOverride := ""
@@ -98,7 +102,16 @@ func wrapPage(title, body string, opts Options) string {
   </style>
 </head>
 <body>
-  <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle color theme" aria-pressed="false">☾</button>
+  <div class="theme-controls">
+    <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle light or dark theme" aria-pressed="false">☾</button>
+    <div class="palette-switcher" aria-label="Color palette">
+      <button class="palette-button" type="button" data-palette-choice="sepia" aria-label="Sepia palette" aria-pressed="false"></button>
+      <button class="palette-button" type="button" data-palette-choice="blue" aria-label="Blue palette" aria-pressed="false"></button>
+      <button class="palette-button" type="button" data-palette-choice="green" aria-label="Green palette" aria-pressed="false"></button>
+      <button class="palette-button" type="button" data-palette-choice="rose" aria-label="Rose palette" aria-pressed="false"></button>
+      <button class="palette-button" type="button" data-palette-choice="catppuccin" aria-label="Catppuccin palette" aria-pressed="false"></button>
+    </div>
+  </div>
   <article class="markdown-body">
 %s
   </article>
@@ -113,8 +126,17 @@ func wrapPage(title, body string, opts Options) string {
   </script>
 </body>
 </html>
-`, themeDefault, themeJS(), title, baseCSS(), highlightCSS(), widthOverride, frameStyle, content, copyJS(), headingsJS(), reportJS())
+`, themeDefault+paletteDefault, themeJS(), title, baseCSS(), highlightCSS(), widthOverride, frameStyle, content, copyJS(), headingsJS(), reportJS())
 	return w.String()
+}
+
+func validPalette(palette string) bool {
+	switch palette {
+	case "sepia", "blue", "green", "rose", "catppuccin":
+		return true
+	default:
+		return false
+	}
 }
 
 // terminalFrame wraps a plain/ANSI body in faux terminal-window chrome (a title

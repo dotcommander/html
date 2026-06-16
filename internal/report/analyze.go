@@ -53,10 +53,16 @@ func Analyze(src []byte, sourceName string) Analysis {
 	if a, ok := analyzeGoTestLog(text, stats); ok {
 		return a
 	}
-	if a, ok := analyzeDelimited(src, stats, ',', KindCSVRecords); ok {
+	if a, ok := analyzeDelimited(src, stats, sourceName, ',', KindCSVRecords); ok {
 		return a
 	}
-	if a, ok := analyzeDelimited(src, stats, '\t', KindTSVRecords); ok {
+	if a, ok := analyzeDelimited(src, stats, sourceName, '\t', KindTSVRecords); ok {
+		return a
+	}
+	if a, ok := analyzeASCIITable(src, stats); ok {
+		return a
+	}
+	if a, ok := analyzeTranscript(text, stats); ok {
 		return a
 	}
 	if a, ok := analyzeLog(text, stats); ok {
@@ -71,14 +77,17 @@ func Analyze(src []byte, sourceName string) Analysis {
 	if a, ok := analyzeTree(text, stats); ok {
 		return a
 	}
+	if signals := mixedSignals(text); len(signals) >= 2 {
+		return Analysis{Kind: KindMixed, Confidence: 0.55, Reasons: []string{"multiple weak format signals: " + strings.Join(signals, ", ")}, Stats: stats}
+	}
 	if a, ok := analyzeSourceContent(src, stats); ok {
+		return a
+	}
+	if a, ok := analyzeTranscript(text, stats); ok {
 		return a
 	}
 	if a, ok := analyzeLog(text, stats); ok {
 		return a
-	}
-	if looksMixed(text) {
-		return Analysis{Kind: KindMixed, Confidence: 0.55, Reasons: []string{"multiple weak format signals"}, Stats: stats}
 	}
 	if a, ok := analyzeSourceName(sourceName, stats, true); ok {
 		return a
@@ -211,7 +220,7 @@ func recordKeys(records []any) ([]string, bool, bool) {
 	return sortedBoolKeys(seen), homogeneous, true
 }
 
-func analyzeDelimited(src []byte, stats Stats, comma rune, kind Kind) (Analysis, bool) {
+func analyzeDelimited(src []byte, stats Stats, sourceName string, comma rune, kind Kind) (Analysis, bool) {
 	text := trimOuterBlankLines(string(stripUTF8BOM(src)))
 	if strings.HasPrefix(strings.TrimLeft(text, " \t\r\n"), string(utf8BOM)) {
 		return Analysis{}, false
@@ -229,11 +238,14 @@ func analyzeDelimited(src []byte, stats Stats, comma rune, kind Kind) (Analysis,
 	r.Comma = comma
 	r.FieldsPerRecord = -1
 	records, err := r.ReadAll()
-	if err != nil || len(records) < 2 {
+	if err != nil || len(records) == 0 {
 		return Analysis{}, false
 	}
 	width := len(records[0])
 	if width < 2 {
+		return Analysis{}, false
+	}
+	if len(records) == 1 && !analyzeDataName(sourceName) {
 		return Analysis{}, false
 	}
 	for _, rec := range records[1:] {
@@ -248,6 +260,132 @@ func analyzeDelimited(src []byte, stats Stats, comma rune, kind Kind) (Analysis,
 		reason = "tsv records with header"
 	}
 	return Analysis{Kind: kind, Confidence: 0.92, Reasons: []string{reason}, Stats: stats, Data: records}, true
+}
+
+func analyzeASCIITable(src []byte, stats Stats) (Analysis, bool) {
+	text := trimOuterBlankLines(string(stripUTF8BOM(src)))
+	if text == "" {
+		return Analysis{}, false
+	}
+	records, ok := parseBoxTable(text)
+	reason := "boxed ascii table"
+	if !ok {
+		records, ok = parseAlignedPipeTable(text)
+		reason = "aligned pipe table"
+	}
+	if !ok || len(records) < 2 || len(records[0]) < 2 {
+		return Analysis{}, false
+	}
+	width := len(records[0])
+	for _, rec := range records[1:] {
+		if len(rec) != width {
+			return Analysis{}, false
+		}
+	}
+	stats.Records = len(records) - 1
+	stats.Fields = width
+	return Analysis{Kind: KindTableRecords, Confidence: 0.88, Reasons: []string{reason}, Stats: stats, Data: records}, true
+}
+
+func parseBoxTable(text string) ([][]string, bool) {
+	lines := nonEmptyLines(text)
+	borderLines := 0
+	records := make([][]string, 0, len(lines))
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if isASCIITableBorder(trimmed) {
+			borderLines++
+			continue
+		}
+		if !strings.HasPrefix(trimmed, "|") || !strings.HasSuffix(trimmed, "|") {
+			continue
+		}
+		row := splitPipeRow(strings.Trim(trimmed, "|"))
+		if len(row) < 2 {
+			return nil, false
+		}
+		records = append(records, row)
+	}
+	return records, borderLines >= 2 && len(records) >= 2
+}
+
+func parseAlignedPipeTable(text string) ([][]string, bool) {
+	lines := nonEmptyLines(text)
+	separator := -1
+	for i, line := range lines {
+		if isAlignedPipeSeparator(strings.TrimSpace(line)) {
+			separator = i
+			break
+		}
+	}
+	if separator <= 0 || separator+1 >= len(lines) {
+		return nil, false
+	}
+	header := splitPipeRow(lines[separator-1])
+	if len(header) < 2 {
+		return nil, false
+	}
+	records := [][]string{header}
+	for _, line := range lines[separator+1:] {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "(") && strings.HasSuffix(trimmed, ")") {
+			break
+		}
+		if !strings.Contains(line, "|") {
+			break
+		}
+		row := splitPipeRow(line)
+		if len(row) != len(header) {
+			return nil, false
+		}
+		records = append(records, row)
+	}
+	return records, len(records) >= 2
+}
+
+func splitPipeRow(line string) []string {
+	parts := strings.Split(line, "|")
+	row := make([]string, 0, len(parts))
+	for _, part := range parts {
+		row = append(row, strings.TrimSpace(part))
+	}
+	return row
+}
+
+func isASCIITableBorder(line string) bool {
+	if len(line) < 3 || !strings.HasPrefix(line, "+") || !strings.HasSuffix(line, "+") {
+		return false
+	}
+	hasDash := false
+	for _, r := range line {
+		switch r {
+		case '+', '-', '=', ' ':
+			if r == '-' || r == '=' {
+				hasDash = true
+			}
+		default:
+			return false
+		}
+	}
+	return hasDash && strings.Count(line, "+") >= 2
+}
+
+func isAlignedPipeSeparator(line string) bool {
+	if !strings.Contains(line, "+") {
+		return false
+	}
+	hasDash := false
+	for _, r := range line {
+		switch r {
+		case '-', '+', ' ':
+			if r == '-' {
+				hasDash = true
+			}
+		default:
+			return false
+		}
+	}
+	return hasDash
 }
 
 func trimOuterBlankLines(text string) string {
@@ -527,15 +665,48 @@ func containsASCIITreeMarker(line string) bool {
 }
 
 var (
-	reTimestamp  = regexp.MustCompile(`(?m)(^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}|^\d{2}:\d{2}:\d{2})`)
-	reSeverity   = regexp.MustCompile(`(?i)\b(DEBUG|INFO|WARN|WARNING|ERROR|FATAL|PASS|FAIL|panic:)\b`)
-	reGoTest     = regexp.MustCompile(`(?m)^(ok|FAIL|\?)\s+\S+\s+((\d+(\.\d+)?s)|\(cached\)|\[no test files\])\s*$`)
-	reGoTestMark = regexp.MustCompile(`(?m)^(--- FAIL:|PASS$|FAIL$)`)
+	reTimestamp         = regexp.MustCompile(`(?m)(^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}|^\d{2}:\d{2}:\d{2})`)
+	reSeverity          = regexp.MustCompile(`(?i)\b(DEBUG|INFO|WARN|WARNING|ERROR|FATAL|PASS|FAIL|panic:)\b`)
+	reGoTest            = regexp.MustCompile(`(?m)^(ok|FAIL|\?)\s+\S+\s+((\d+(\.\d+)?s)|\(cached\)|\[no test files\])\s*$`)
+	reGoTestMark        = regexp.MustCompile(`(?m)^(--- FAIL:|PASS$|FAIL$)`)
+	reTranscriptSpeaker = regexp.MustCompile(`^(?:Speaker [0-9A-Za-z]+|Host|Guest|Interviewer|Interviewee|Participant [0-9A-Za-z]+|[A-Z][A-Za-z .'-]{1,40}):\s+\S`)
 )
 
 func analyzeGoTestLog(text string, stats Stats) (Analysis, bool) {
 	if reGoTest.MatchString(text) || reGoTestMark.MatchString(text) || strings.Contains(text, "\nFAIL\t") {
 		return Analysis{Kind: KindLog, Confidence: 0.82, Reasons: []string{"log/test/console markers"}, Stats: stats}, true
+	}
+	return Analysis{}, false
+}
+
+func analyzeTranscript(text string, stats Stats) (Analysis, bool) {
+	lines := nonEmptyLines(text)
+	if len(lines) < 3 {
+		return Analysis{}, false
+	}
+	turns := 0
+	speakers := map[string]bool{}
+	explicitSpeakers := map[string]bool{}
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if !reTranscriptSpeaker.MatchString(line) {
+			continue
+		}
+		label, _, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		turns++
+		speakers[label] = true
+		if strings.HasPrefix(label, "Speaker ") || strings.HasPrefix(label, "Participant ") || label == "Host" || label == "Guest" || label == "Interviewer" || label == "Interviewee" {
+			explicitSpeakers[label] = true
+		}
+	}
+	repeatedSpeakerTurns := turns > len(speakers)
+	if turns >= 3 && float64(turns)/float64(len(lines)) >= 0.6 && len(speakers) >= 2 && (len(explicitSpeakers) >= 2 || repeatedSpeakerTurns) {
+		stats.Records = turns
+		stats.Fields = len(speakers)
+		return Analysis{Kind: KindTranscript, Confidence: 0.84, Reasons: []string{"speaker-labeled transcript turns"}, Stats: stats}, true
 	}
 	return Analysis{}, false
 }
@@ -567,21 +738,32 @@ func analyzeLog(text string, stats Stats) (Analysis, bool) {
 	return Analysis{}, false
 }
 
-func looksMixed(text string) bool {
-	signals := 0
-	if strings.Contains(text, "\n```") {
-		signals++
-	}
-	if strings.Contains(text, "\n{") || strings.Contains(text, "\n[") {
-		signals++
-	}
-	if strings.Contains(text, "\n- ") || strings.Contains(text, "\n# ") {
-		signals++
+func mixedSignals(text string) []string {
+	signals := make([]string, 0, 4)
+	for _, line := range strings.Split(text, "\n") {
+		trimmed := strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~"):
+			signals = appendSignal(signals, "fenced code")
+		case strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "["):
+			signals = appendSignal(signals, "json-like block")
+		case strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "# "):
+			signals = appendSignal(signals, "markdown-like prose")
+		}
 	}
 	if reSeverity.MatchString(text) {
-		signals++
+		signals = appendSignal(signals, "log severity")
 	}
-	return signals >= 2
+	return signals
+}
+
+func appendSignal(signals []string, signal string) []string {
+	for _, existing := range signals {
+		if existing == signal {
+			return signals
+		}
+	}
+	return append(signals, signal)
 }
 
 func isBinary(window []byte) bool {
