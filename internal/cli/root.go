@@ -14,7 +14,7 @@ func Execute() error { return newRootCmd().Execute() }
 
 func newRootCmd() *cobra.Command {
 	var noOpen, force, safe, plain, markdown bool
-	var title, lang string
+	var title, lang, output string
 	cmd := &cobra.Command{
 		Use:   "html [file]",
 		Short: "Render Markdown or piped text to a clean HTML page and open it in the browser",
@@ -46,6 +46,7 @@ func newRootCmd() *cobra.Command {
 				MaxWidth: cfg.MaxWidth,
 				Theme:    cfg.DefaultTheme,
 				TOC:      cfg.TOC,
+				Output:   output,
 			}
 			switch {
 			case len(args) == 1:
@@ -57,10 +58,35 @@ func newRootCmd() *cobra.Command {
 			}
 
 			path, err := actions.Run(opts)
-			if path != "" {
-				fmt.Fprintln(cmd.OutOrStdout(), path) // always surface the cache path when known
+			if err != nil {
+				return err
 			}
-			return err
+
+			switch opts.Output {
+			case "":
+				if path != "" {
+					fmt.Fprintln(cmd.OutOrStdout(), path)
+				}
+			case "-":
+				html, err := os.ReadFile(path)
+				if err != nil {
+					return fmt.Errorf("read cache: %w", err)
+				}
+				_, err = cmd.OutOrStdout().Write(html)
+				if err != nil {
+					return fmt.Errorf("write stdout: %w", err)
+				}
+			default:
+				html, err := os.ReadFile(path)
+				if err != nil {
+					return fmt.Errorf("read cache: %w", err)
+				}
+				if err := os.WriteFile(opts.Output, html, 0o644); err != nil {
+					return fmt.Errorf("write output: %w", err)
+				}
+				fmt.Fprintln(cmd.OutOrStdout(), opts.Output)
+			}
+			return nil
 		},
 	}
 	cmd.Flags().BoolVarP(&noOpen, "no-open", "n", false, "render only; print the cache path without opening the browser")
@@ -70,6 +96,7 @@ func newRootCmd() *cobra.Command {
 	cmd.Flags().BoolVarP(&markdown, "markdown", "m", false, "render input as Markdown (overrides stdin auto-detection)")
 	cmd.Flags().StringVarP(&title, "title", "t", "stdin", "page title for piped input")
 	cmd.Flags().StringVarP(&lang, "lang", "l", "", "syntax-highlight language for plain mode (e.g. go, json; \"text\" = no highlighting)")
+	cmd.Flags().StringVarP(&output, "output", "o", "", "write rendered HTML to a path (\"-\" for stdout) instead of caching and opening")
 	return cmd
 }
 

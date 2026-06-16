@@ -38,6 +38,7 @@ type Options struct {
 	MaxWidth string    // reader column CSS max-width (config max_width); "" = default
 	Theme    string    // initial theme (config default_theme): "light"|"dark"|"auto"|""
 	TOC      *bool     // TOC override (config toc): nil = automatic
+	Output   string    // -o: write rendered HTML to this path ("-" = stdout) instead of caching+opening; "" = default
 }
 
 // Run renders the configured source (Options.File or Options.Stdin) to its cache
@@ -53,7 +54,7 @@ func Run(opts Options) (path string, err error) {
 	if err != nil {
 		return path, err
 	}
-	if !opts.NoOpen {
+	if !opts.NoOpen && opts.Output == "" {
 		if err := open.Open(path, opts.OpenCmd); err != nil {
 			return path, fmt.Errorf("open browser: %w", err)
 		}
