@@ -41,7 +41,9 @@ func TestDetect(t *testing.T) {
 		{"readme with fence", "# Title\n\nText.\n\n```go\nfmt.Println()\n```\n", KindMarkdown},
 		{"tilde fence", "~~~\ncode block\n~~~\n", KindMarkdown},
 		{"gfm table", "| a | b |\n|---|---|\n| 1 | 2 |\n", KindMarkdown},
+		{"gfm task list", "- [x] ship renderer\n- [ ] verify screenshots\n", KindMarkdown},
 		{"setext equals", "Title\n=====\n\nbody text\n", KindMarkdown},
+		{"setext dash heading", "Title\n-----\n\nbody text\n", KindMarkdown},
 	}
 	for _, tc := range cases {
 		tc := tc

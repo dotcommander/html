@@ -61,6 +61,36 @@ func TestRun_StdinMarkdownByDetection(t *testing.T) {
 	}
 }
 
+func TestRun_StdinTaskListMarkdownByDetection(t *testing.T) {
+	t.Parallel()
+	content := "task-list-detect-uniq\n\n- [x] ship renderer\n- [ ] verify screenshots\n"
+	html := readRendered(t, pipeToHTML(t, content, Options{}))
+	if strings.Contains(html, "language-plaintext") {
+		t.Errorf("expected Markdown render, got plain wrapper")
+	}
+	if !strings.Contains(html, `type="checkbox"`) {
+		t.Errorf("expected GFM task list checkboxes")
+	}
+}
+
+func TestRun_StdinTitleInvalidatesContentCache(t *testing.T) {
+	t.Parallel()
+	content := "stdin-title-cache-uniq\nplain text\n"
+
+	first := readRendered(t, pipeToHTML(t, content, Options{Title: "First Title"}))
+	if !strings.Contains(first, "<title>First Title</title>") {
+		t.Fatalf("expected first title in cached render")
+	}
+
+	second := readRendered(t, pipeToHTML(t, content, Options{Title: "Second Title"}))
+	if !strings.Contains(second, "<title>Second Title</title>") {
+		t.Fatalf("expected changed title to invalidate cached render")
+	}
+	if strings.Contains(second, "<title>First Title</title>") {
+		t.Fatalf("stale cached title reused after title changed")
+	}
+}
+
 func TestRun_StdinForceMarkdown(t *testing.T) {
 	t.Parallel()
 	content := "force-md-uniq just some plain words\n"

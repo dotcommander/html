@@ -33,6 +33,24 @@ func TestInlineImage_LocalPNG(t *testing.T) {
 	assert.NotContains(t, got, `src="img.png"`)
 }
 
+func TestInlineImage_PercentEncodedLocalPath(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	imgData := []byte("png bytes")
+	require.NoError(t, os.WriteFile(filepath.Join(tmp, "my dot.png"), imgData, 0o644))
+
+	src := []byte("![alt](my%20dot.png)\n")
+	fpBefore := ImageDependencyFingerprint(src, tmp)
+	got, err := Render(src, Options{SourceDir: tmp, FallbackTitle: "t"})
+	require.NoError(t, err)
+	assert.Contains(t, got, "data:image/png;base64,")
+	assert.NotContains(t, got, `src="my%20dot.png"`)
+
+	require.NoError(t, os.WriteFile(filepath.Join(tmp, "my dot.png"), []byte("new png bytes"), 0o644))
+	assert.NotEqual(t, fpBefore, ImageDependencyFingerprint(src, tmp))
+}
+
 func TestInlineImage_RemoteUnchanged(t *testing.T) {
 	t.Parallel()
 
