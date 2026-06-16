@@ -16,6 +16,11 @@ vet:
 
 check: test vet
 
+installed-check:
+    scripts/check-installed-html.sh
+
+verify-installed: install installed-check
+
 smoke file="CLAUDE.md": build
     ./html -n {{file}}
 
