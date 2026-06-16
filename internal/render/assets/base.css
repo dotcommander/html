@@ -434,6 +434,13 @@ body::before {
   text-transform: uppercase;
 }
 
+/* JS slideshow mode: report.js sets [hidden] on every slide but the current
+   one. Without JS no slide is hidden, so the deck stays a scrollable stack —
+   progressive enhancement. */
+.report-slide[hidden] {
+  display: none;
+}
+
 @media (min-height: 40rem) {
   .report-slides {
     scroll-snap-type: y proximity;
@@ -708,10 +715,14 @@ body::before {
     text-transform: uppercase;
   }
 
-  .report-slide {
+  .report-slide,
+  .report-slide[hidden] {
+    display: block;
     min-height: auto;
     padding: 1rem;
     border-radius: 8px;
+    break-after: page;
+    page-break-after: always;
   }
 }
 

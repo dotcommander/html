@@ -51,6 +51,60 @@
     });
   });
 
+  document.querySelectorAll("[data-report-slides]").forEach((deck) => {
+    const slides = Array.from(deck.querySelectorAll(".report-slide"));
+    if (slides.length <= 1) return;
+
+    let index = 0;
+    const show = (next) => {
+      index = Math.max(0, Math.min(slides.length - 1, next));
+      slides.forEach((slide, i) => {
+        const active = i === index;
+        slide.hidden = !active;
+        slide.setAttribute("aria-current", active ? "true" : "false");
+      });
+      const active = slides[index];
+      active.tabIndex = -1;
+      active.focus({ preventScroll: true });
+    };
+
+    show(0);
+
+    document.addEventListener("keydown", (event) => {
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) {
+        return;
+      }
+      const t = event.target;
+      if (t && (t.isContentEditable || t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT")) {
+        return;
+      }
+      let next = null;
+      switch (event.key) {
+        case "ArrowRight":
+        case "ArrowDown":
+        case "PageDown":
+        case " ":
+          next = index + 1;
+          break;
+        case "ArrowLeft":
+        case "ArrowUp":
+        case "PageUp":
+          next = index - 1;
+          break;
+        case "Home":
+          next = 0;
+          break;
+        case "End":
+          next = slides.length - 1;
+          break;
+        default:
+          return;
+      }
+      event.preventDefault();
+      show(next);
+    });
+  });
+
   document.querySelectorAll(".report-table-wrap").forEach((wrap) => {
     const input = wrap.querySelector(".report-filter");
     const status = wrap.querySelector(".report-filter-status");
