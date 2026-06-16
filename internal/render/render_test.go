@@ -154,6 +154,7 @@ Some text with ` + "`inline code`" + `.
 		{"gfm table", "<table"},
 		{"gfm task list checkbox", `type="checkbox"`},
 		{"base.css embedded", ".markdown-body"},
+		{"responsive page width", "width: min(calc(100% - 2rem), 46rem);"},
 		{"highlight css embedded", "chroma"},
 		{"chroma code block", `class="chroma`},
 		{"dark highlight targets emitted class", `:root[data-theme="dark"] .chroma.light`},

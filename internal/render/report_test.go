@@ -9,6 +9,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func labeledCell(label, value string) string {
+	return `<td data-label="` + escapeTableText(label) + `">` + escapeTableText(value) + `</td>`
+}
+
+func cardField(label, value string) string {
+	return `<div><dt>` + escapeTableText(label) + `</dt><dd>` + escapeTableText(value) + `</dd></div>`
+}
+
 func TestRenderReport_TabInitialFocusState(t *testing.T) {
 	t.Parallel()
 
@@ -778,8 +786,34 @@ func TestRenderReport_JSONTableDistinguishesNullFromMissing(t *testing.T) {
 	got, err := RenderReport(src, Options{FallbackTitle: "values"}, analysis, plan)
 	require.NoError(t, err)
 
-	assert.Contains(t, got, `<td>has-null</td><td>null</td>`)
-	assert.Contains(t, got, `<td>missing</td><td></td>`)
+	assert.Contains(t, got, labeledCell("name", "has-null")+labeledCell("value", "null"))
+	assert.Contains(t, got, labeledCell("name", "missing")+labeledCell("value", ""))
+}
+
+func TestRenderReport_RecordCardsOmitEmptyFields(t *testing.T) {
+	t.Parallel()
+
+	src := []byte(`[{"name":"has-null","owner":"","value":null},{"name":"missing","owner":"Ops"}]`)
+	analysis := report.Analyze(src, "values.json")
+	plan := report.ReportPlan{
+		Version: report.PlanVersion,
+		Kind:    report.KindJSONRecords,
+		Layout:  report.LayoutSinglePage,
+		Mode:    report.ModeDataBrowser,
+		Components: []report.Component{
+			{Type: report.ComponentRecordCards, Source: "records", Title: "Details", Options: map[string]string{}},
+		},
+	}
+
+	got, err := RenderReport(src, Options{FallbackTitle: "values"}, analysis, plan)
+	require.NoError(t, err)
+
+	assert.Contains(t, got, `class="record-card"`)
+	assert.Contains(t, got, cardField("name", "has-null"))
+	assert.Contains(t, got, cardField("value", "null"))
+	assert.Contains(t, got, cardField("owner", "Ops"))
+	assert.NotContains(t, got, cardField("owner", ""))
+	assert.NotContains(t, got, cardField("value", ""))
 }
 
 func TestRenderReport_JSONTableIgnoresLeadingBOM(t *testing.T) {
@@ -800,8 +834,8 @@ func TestRenderReport_JSONTableIgnoresLeadingBOM(t *testing.T) {
 	got, err := RenderReport(src, Options{FallbackTitle: "ids"}, analysis, plan)
 	require.NoError(t, err)
 
-	assert.Contains(t, got, `<td>1</td>`)
-	assert.Contains(t, got, `<td>bom</td>`)
+	assert.Contains(t, got, labeledCell("id", "1"))
+	assert.Contains(t, got, labeledCell("name", "bom"))
 	assert.NotContains(t, got, "\ufeff")
 }
 
@@ -832,8 +866,8 @@ func TestRenderReport_JSONLinesTableUsesAnalyzedRecords(t *testing.T) {
 	assert.Contains(t, got, `class="report-table"`)
 	assert.Contains(t, got, `<th scope="col"><button type="button">name</button></th>`)
 	assert.Contains(t, got, `<th scope="col"><button type="button">score</button></th>`)
-	assert.Contains(t, got, `<td>a</td><td>1</td>`)
-	assert.Contains(t, got, `<td>b</td><td>2</td>`)
+	assert.Contains(t, got, labeledCell("name", "a")+labeledCell("score", "1"))
+	assert.Contains(t, got, labeledCell("name", "b")+labeledCell("score", "2"))
 }
 
 func TestRenderReport_SingleJSONLineRecordRendersTable(t *testing.T) {
@@ -848,7 +882,7 @@ func TestRenderReport_SingleJSONLineRecordRendersTable(t *testing.T) {
 	assert.Contains(t, got, `<dd>json-records</dd>`)
 	assert.Contains(t, got, `class="report-table"`)
 	assert.Contains(t, got, `<p class="report-filter-status" aria-live="polite">1 row</p>`)
-	assert.Contains(t, got, `<td>a</td><td>1</td>`)
+	assert.Contains(t, got, labeledCell("name", "a")+labeledCell("score", "1"))
 	assert.NotContains(t, got, `<h2>JSON</h2>`)
 }
 
@@ -863,7 +897,7 @@ func TestRenderReport_SingleNDJSONRecordRendersTable(t *testing.T) {
 
 	assert.Contains(t, got, `<dd>json-records</dd>`)
 	assert.Contains(t, got, `class="report-table"`)
-	assert.Contains(t, got, `<td>a</td><td>1</td>`)
+	assert.Contains(t, got, labeledCell("name", "a")+labeledCell("score", "1"))
 	assert.NotContains(t, got, `<h2>JSON</h2>`)
 }
 
@@ -878,7 +912,7 @@ func TestRenderReport_SingleJSONLinesRecordRendersTable(t *testing.T) {
 
 	assert.Contains(t, got, `<dd>json-records</dd>`)
 	assert.Contains(t, got, `class="report-table"`)
-	assert.Contains(t, got, `<td>a</td><td>1</td>`)
+	assert.Contains(t, got, labeledCell("name", "a")+labeledCell("score", "1"))
 	assert.NotContains(t, got, `<h2>JSON</h2>`)
 }
 
@@ -902,8 +936,8 @@ func TestRenderReport_CSVTablePreservesDuplicateHeaderCells(t *testing.T) {
 
 	assert.Contains(t, got, `<button type="button">tag</button><`)
 	assert.Contains(t, got, `<button type="button">tag 2</button>`)
-	assert.Contains(t, got, `<td>left</td><td>right</td>`)
-	assert.NotContains(t, got, `<td>right</td><td>right</td>`)
+	assert.Contains(t, got, labeledCell("tag", "left")+labeledCell("tag 2", "right"))
+	assert.NotContains(t, got, labeledCell("tag", "right")+labeledCell("tag 2", "right"))
 }
 
 func TestRenderReport_CSVTableDeduplicatesHeaderLabelCollisions(t *testing.T) {
@@ -927,7 +961,7 @@ func TestRenderReport_CSVTableDeduplicatesHeaderLabelCollisions(t *testing.T) {
 	assert.Contains(t, got, `<button type="button">tag</button>`)
 	assert.Contains(t, got, `<button type="button">tag 2</button>`)
 	assert.Contains(t, got, `<button type="button">tag 2 2</button>`)
-	assert.Contains(t, got, `<td>left</td><td>middle</td><td>right</td>`)
+	assert.Contains(t, got, labeledCell("tag", "left")+labeledCell("tag 2", "middle")+labeledCell("tag 2 2", "right"))
 }
 
 func TestRenderReport_CSVTableLabelsBlankHeaders(t *testing.T) {
@@ -950,7 +984,7 @@ func TestRenderReport_CSVTableLabelsBlankHeaders(t *testing.T) {
 
 	assert.Contains(t, got, `<button type="button">Column 2</button>`)
 	assert.NotContains(t, got, `<button type="button"></button>`)
-	assert.Contains(t, got, `<td>Alpha</td><td>10</td>`)
+	assert.Contains(t, got, labeledCell("name", "Alpha")+labeledCell("Column 2", "10"))
 }
 
 func TestRenderReport_CSVTablePreservesRecordSpaces(t *testing.T) {
@@ -975,9 +1009,9 @@ func TestRenderReport_CSVTablePreservesRecordSpaces(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<button type="button"> name</button>`)
-	assert.Contains(t, got, `<td> Alpha</td><td>1 </td>`)
+	assert.Contains(t, got, labeledCell(" name", " Alpha")+labeledCell("score", "1 "))
 	assert.NotContains(t, got, `<button type="button">name</button>`)
-	assert.NotContains(t, got, `<td>   </td><td></td>`)
+	assert.NotContains(t, got, labeledCell(" name", "   ")+labeledCell("score", ""))
 }
 
 func TestRenderReport_TableStripsANSI(t *testing.T) {
@@ -1001,7 +1035,7 @@ func TestRenderReport_TableStripsANSI(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<button type="button">name</button>`)
-	assert.Contains(t, got, `<td>Alpha</td><td>10</td>`)
+	assert.Contains(t, got, labeledCell("name", "Alpha")+labeledCell("score", "10"))
 	assert.NotContains(t, got, "\x1b[1m")
 	assert.NotContains(t, got, "\x1b[32m")
 }
@@ -1053,8 +1087,8 @@ func TestRenderReport_CSVTableUsesAnalyzerRows(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<p class="report-filter-status" aria-live="polite">1 row</p>`)
-	assert.Contains(t, got, `<td>Alpha</td><td>10</td>`)
-	assert.NotContains(t, got, `<td>   </td><td></td>`)
+	assert.Contains(t, got, labeledCell("name", "Alpha")+labeledCell("score", "10"))
+	assert.NotContains(t, got, labeledCell("name", "   ")+labeledCell("score", ""))
 }
 
 func TestRenderReport_TSVTableUsesAnalyzerRows(t *testing.T) {
@@ -1079,6 +1113,6 @@ func TestRenderReport_TSVTableUsesAnalyzerRows(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<p class="report-filter-status" aria-live="polite">1 row</p>`)
-	assert.Contains(t, got, `<td>Alpha</td><td>10</td>`)
-	assert.NotContains(t, got, `<td>   </td><td></td>`)
+	assert.Contains(t, got, labeledCell("name", "Alpha")+labeledCell("score", "10"))
+	assert.NotContains(t, got, labeledCell("name", "   ")+labeledCell("score", ""))
 }
