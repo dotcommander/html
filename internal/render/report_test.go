@@ -69,6 +69,34 @@ func TestRenderReport_TabbedLayoutWithSingleComponent(t *testing.T) {
 	assert.Contains(t, got, `<section id="report-panel-0" class="report-tab-panel" role="tabpanel" aria-labelledby="report-tab-0">`)
 }
 
+func TestRenderReport_SlidesLayout(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("name,score\nAlpha,10\nBeta,2\n")
+	analysis := report.Analyze(src, "scores.csv")
+	plan := report.ReportPlan{
+		Version: report.PlanVersion,
+		Kind:    report.KindCSVRecords,
+		Layout:  report.LayoutSlides,
+		Mode:    report.ModeDataBrowser,
+		Components: []report.Component{
+			{Type: report.ComponentSummary, Source: "analysis", Title: "Summary", Options: map[string]string{}},
+			{Type: report.ComponentDataTable, Source: "records", Title: "Records", Options: map[string]string{}},
+		},
+	}
+
+	got, err := RenderReport(src, Options{FallbackTitle: "scores"}, analysis, plan)
+	require.NoError(t, err)
+
+	assert.Contains(t, got, `class="report-slides" data-report-slides`)
+	assert.Contains(t, got, `class="report-slide" aria-label="Slide 1 of 2: Summary"`)
+	assert.Contains(t, got, `class="report-slide" aria-label="Slide 2 of 2: Records"`)
+	assert.Contains(t, got, `<div class="report-slide-count">1 / 2</div>`)
+	assert.Contains(t, got, `<div class="report-slide-count">2 / 2</div>`)
+	assert.Contains(t, got, `.report-slide`)
+	assert.NotContains(t, got, `role="tablist"`)
+}
+
 func TestRenderReport_FilterStatusSingular(t *testing.T) {
 	t.Parallel()
 

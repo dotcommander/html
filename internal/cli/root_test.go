@@ -91,6 +91,26 @@ func TestRoot_PlanPrintsReportPlanJSON(t *testing.T) {
 	}
 }
 
+func TestRoot_PlanAcceptsSlidesLayout(t *testing.T) {
+	t.Parallel()
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"--plan", "--layout", "slides", "--planner", "off"})
+	cmd.SetIn(strings.NewReader(`[{"name":"a","score":1},{"name":"b","score":2}]`))
+	out := &bytes.Buffer{}
+	cmd.SetOut(out)
+	cmd.SetErr(&bytes.Buffer{})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	var p report.ReportPlan
+	if err := json.Unmarshal(out.Bytes(), &p); err != nil {
+		t.Fatalf("plan json: %v\n%s", err, out.String())
+	}
+	if p.Layout != report.LayoutSlides {
+		t.Fatalf("layout = %s, want %s", p.Layout, report.LayoutSlides)
+	}
+}
+
 func TestRoot_PlanOutputMutuallyExclusive(t *testing.T) {
 	t.Parallel()
 	cmd := newRootCmd()

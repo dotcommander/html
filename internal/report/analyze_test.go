@@ -732,6 +732,19 @@ func TestPlan_TableOverrideAppliesToCSVRows(t *testing.T) {
 	}
 }
 
+func TestPlan_SlidesLayoutOverride(t *testing.T) {
+	t.Parallel()
+
+	_, p := Plan(t.Context(), []byte("name,score\na,1\n"), Options{Layout: LayoutOverrideSlides, Planner: PlannerOff})
+
+	if p.Layout != LayoutSlides {
+		t.Fatalf("layout = %s, want %s", p.Layout, LayoutSlides)
+	}
+	if len(p.Components) == 0 {
+		t.Fatalf("components is empty")
+	}
+}
+
 func TestPlan_CodeOverrideAppliesToCSVRows(t *testing.T) {
 	t.Parallel()
 
@@ -866,12 +879,30 @@ func TestLLMCacheKeyIncludesReportOverrides(t *testing.T) {
 	autoKey, _ := llmCacheKey(src, analysis, base)
 	tableKey, _ := llmCacheKey(src, analysis, Options{Planner: PlannerLLM, LLMModel: "test-model", Mode: ModeOverrideTable, Layout: LayoutOverrideAuto})
 	tabsKey, _ := llmCacheKey(src, analysis, Options{Planner: PlannerLLM, LLMModel: "test-model", Mode: ModeOverrideAuto, Layout: LayoutOverrideTabs})
+	slidesKey, _ := llmCacheKey(src, analysis, Options{Planner: PlannerLLM, LLMModel: "test-model", Mode: ModeOverrideAuto, Layout: LayoutOverrideSlides})
 
 	if autoKey == tableKey {
 		t.Fatalf("mode override must affect LLM planner cache key")
 	}
 	if autoKey == tabsKey {
 		t.Fatalf("layout override must affect LLM planner cache key")
+	}
+	if autoKey == slidesKey || tabsKey == slidesKey {
+		t.Fatalf("slides layout override must have a distinct LLM planner cache key")
+	}
+}
+
+func TestLLMUserPromptAllowsSlidesLayout(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("name,score\nAlpha,10\n")
+	analysis := Analyze(src, "scores.csv")
+	fallback := deterministicPlan(analysis, Options{})
+	_, summary := llmCacheKey(src, analysis, Options{Planner: PlannerLLM, LLMModel: "test-model"})
+	prompt := llmUserPrompt(analysis, fallback, summary, src)
+
+	if !strings.Contains(prompt, string(LayoutSlides)) {
+		t.Fatalf("planner prompt does not mention %s", LayoutSlides)
 	}
 }
 

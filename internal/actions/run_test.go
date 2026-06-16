@@ -117,6 +117,8 @@ func TestReportCacheTagIncludesRenderedPlanFields(t *testing.T) {
 	}
 	tabs := base
 	tabs.Layout = report.LayoutTabbedPage
+	slides := base
+	slides.Layout = report.LayoutSlides
 	titled := base
 	titled.Components = append([]report.Component(nil), base.Components...)
 	titled.Components[0].Title = "Different"
@@ -125,6 +127,8 @@ func TestReportCacheTagIncludesRenderedPlanFields(t *testing.T) {
 	typed.Components[0].Type = report.ComponentCodeBlock
 
 	require.NotEqual(t, reportCacheTag(base, Options{}), reportCacheTag(tabs, Options{}))
+	require.NotEqual(t, reportCacheTag(base, Options{}), reportCacheTag(slides, Options{}))
+	require.NotEqual(t, reportCacheTag(tabs, Options{}), reportCacheTag(slides, Options{}))
 	require.NotEqual(t, reportCacheTag(base, Options{}), reportCacheTag(titled, Options{}))
 	require.NotEqual(t, reportCacheTag(base, Options{}), reportCacheTag(typed, Options{}))
 }
