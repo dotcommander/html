@@ -14,6 +14,7 @@ import (
 	"github.com/yuin/goldmark/parser"
 	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 	"github.com/yuin/goldmark/text"
+	"github.com/yuin/goldmark/util"
 )
 
 // newMarkdown builds the goldmark pipeline. unsafe controls raw-HTML
@@ -33,7 +34,10 @@ func newMarkdown(unsafe bool) goldmark.Markdown {
 				highlighting.WithFormatOptions(chromahtml.WithClasses(true)),
 			),
 		),
-		goldmark.WithParserOptions(parser.WithAutoHeadingID()),
+		goldmark.WithParserOptions(
+			parser.WithAutoHeadingID(),
+			parser.WithASTTransformers(util.Prioritized(imageInliner{}, 100)),
+		),
 	}
 	if unsafe {
 		opts = append(opts, goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()))
@@ -76,6 +80,11 @@ type Options struct {
 	// SourceName is the input's file name (with extension) when known, used to
 	// detect the highlight language by filename; "" for stdin (content-detected).
 	SourceName string
+	// directory local image refs resolve against ("" disables image inlining)
+	SourceDir string
+	// ReportTag distinguishes report-plan renders from legacy Markdown/plain
+	// renders in the cache fingerprint. Empty preserves legacy cache behavior.
+	ReportTag string
 }
 
 // cacheTag encodes the Options fields that change rendered output, so the
@@ -106,6 +115,9 @@ func (o Options) cacheTag() string {
 			b.WriteString("+toc=off")
 		}
 	}
+	if o.ReportTag != "" {
+		b.WriteString("+report=" + o.ReportTag)
+	}
 	return b.String()
 }
 
@@ -119,8 +131,10 @@ func Render(src []byte, opts Options) (string, error) {
 	if opts.Safe {
 		md = mdSafe
 	}
+	pc := parser.NewContext()
+	pc.Set(baseDirKey, opts.SourceDir)
 	var buf bytes.Buffer
-	if err := md.Convert(src, &buf); err != nil {
+	if err := md.Convert(src, &buf, parser.WithContext(pc)); err != nil {
 		return "", err
 	}
 	title, fromHeading, headings := analyze(md, src, opts.FallbackTitle)
