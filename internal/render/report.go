@@ -7,6 +7,7 @@ import (
 	"fmt"
 	htmlpkg "html"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -80,16 +81,83 @@ func renderTabs(src []byte, opts Options, analysis report.Analysis, components [
 	return `<div class="report-tabs" data-report-tabs><div class="report-tab-list" role="tablist">` + buttons.String() + `</div>` + panels.String() + `</div>`, nil
 }
 
+// slideUnit is one rendered slide: a plain-text title (for the aria-label) and
+// its HTML body.
+type slideUnit struct {
+	title string
+	html  string
+}
+
+// h2SplitRe locates the start of each <h2> heading in rendered article HTML.
+// goldmark escapes fenced-code content, so a literal "## " in a code block
+// never produces a real <h2> tag — only headings match, which makes splitting
+// on this marker safe without a full HTML parse.
+var h2SplitRe = regexp.MustCompile(`(?i)<h2(?:\s[^>]*)?>`)
+
+// headingInnerRe captures the inner HTML of the first <h1>/<h2> in a chunk.
+var headingInnerRe = regexp.MustCompile(`(?is)<h[12](?:\s[^>]*)?>(.*?)</h[12]>`)
+
+// htmlTagRe strips tags so a heading's inner HTML becomes plain title text.
+var htmlTagRe = regexp.MustCompile(`<[^>]*>`)
+
+// headingTitle returns the plain text of the first h1/h2 in chunk, or "".
+func headingTitle(chunk string) string {
+	m := headingInnerRe.FindStringSubmatch(chunk)
+	if m == nil {
+		return ""
+	}
+	return strings.TrimSpace(htmlpkg.UnescapeString(htmlTagRe.ReplaceAllString(m[1], "")))
+}
+
+// splitArticleByH2 breaks rendered article HTML into one slide per <h2> section
+// — the "h2 sections become slides" intent. Content before the first <h2> (the
+// h1 title and any intro) becomes the opening slide; an article with no <h2>
+// stays a single slide titled fallback.
+func splitArticleByH2(articleHTML, fallback string) []slideUnit {
+	loc := h2SplitRe.FindAllStringIndex(articleHTML, -1)
+	if len(loc) == 0 {
+		return []slideUnit{{title: fallback, html: articleHTML}}
+	}
+	titleOr := func(chunk string) string {
+		if t := headingTitle(chunk); t != "" {
+			return t
+		}
+		return fallback
+	}
+	var units []slideUnit
+	if intro := articleHTML[:loc[0][0]]; strings.TrimSpace(intro) != "" {
+		units = append(units, slideUnit{title: titleOr(intro), html: intro})
+	}
+	for i, m := range loc {
+		end := len(articleHTML)
+		if i+1 < len(loc) {
+			end = loc[i+1][0]
+		}
+		chunk := articleHTML[m[0]:end]
+		units = append(units, slideUnit{title: titleOr(chunk), html: chunk})
+	}
+	return units
+}
+
 func renderSlides(src []byte, opts Options, analysis report.Analysis, components []report.Component) (string, error) {
-	var b strings.Builder
-	b.WriteString(`<div class="report-slides" data-report-slides>`)
-	total := len(components)
-	for i, c := range components {
+	var units []slideUnit
+	for _, c := range components {
 		part, err := renderReportComponent(src, opts, analysis, c)
 		if err != nil {
 			return "", err
 		}
-		fmt.Fprintf(&b, `<section class="report-slide" aria-label="Slide %d of %d: %s"><div class="report-slide-count">%d / %d</div>%s</section>`, i+1, total, htmlpkg.EscapeString(c.Title), i+1, total, part)
+		if c.Type == report.ComponentArticle {
+			units = append(units, splitArticleByH2(part, c.Title)...)
+			continue
+		}
+		units = append(units, slideUnit{title: c.Title, html: part})
+	}
+
+	var b strings.Builder
+	b.WriteString(`<div class="report-slides" data-report-slides>`)
+	total := len(units)
+	for i, u := range units {
+		fmt.Fprintf(&b, `<section class="report-slide" aria-label="Slide %d of %d: %s"><div class="report-slide-count">%d / %d</div>%s</section>`, i+1, total, htmlpkg.EscapeString(u.title), i+1, total, u.html)
 	}
 	b.WriteString(`</div>`)
 	return b.String(), nil

@@ -1144,3 +1144,27 @@ func TestRenderReport_TSVTableUsesAnalyzerRows(t *testing.T) {
 	assert.Contains(t, got, labeledCell("name", "Alpha")+labeledCell("score", "10"))
 	assert.NotContains(t, got, labeledCell("name", "   ")+labeledCell("score", ""))
 }
+
+func TestRenderReport_SlidesSplitsMarkdownByH2(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("# Deck\n\n## One\n\nfirst section\n\n## Two\n\nsecond section\n")
+	analysis := report.Analyze(src, "deck.md")
+	plan := report.ReportPlan{
+		Version:    report.PlanVersion,
+		Kind:       report.KindMarkdown,
+		Layout:     report.LayoutSlides,
+		Mode:       report.ModeReader,
+		Components: []report.Component{{Type: report.ComponentArticle, Source: "input", Title: "Deck", Options: map[string]string{}}},
+	}
+
+	got, err := RenderReport(src, Options{FallbackTitle: "deck"}, analysis, plan)
+	require.NoError(t, err)
+
+	// h1+intro slide, then one slide per h2 = 3 slides.
+	assert.Equal(t, 3, strings.Count(got, `class="report-slide"`), "intro + one slide per h2")
+	assert.Contains(t, got, `aria-label="Slide 1 of 3: Deck"`)
+	assert.Contains(t, got, `aria-label="Slide 2 of 3: One"`)
+	assert.Contains(t, got, `aria-label="Slide 3 of 3: Two"`)
+	assert.Contains(t, got, `<div class="report-slide-count">2 / 3</div>`)
+}
