@@ -390,6 +390,14 @@ func TestAnalyze_DeterministicKinds(t *testing.T) {
 			wantType:   ComponentPreformatted,
 		},
 		{
+			name: "http access log",
+			input: "127.0.0.1 - - [16/Jun/2026:12:00:00 -0400] \"GET /index.html HTTP/1.1\" 200 1234\n" +
+				"127.0.0.1 - - [16/Jun/2026:12:00:01 -0400] \"POST /api HTTP/1.1\" 500 42\n",
+			sourceName: "access.log",
+			wantKind:   KindLog,
+			wantType:   ComponentPreformatted,
+		},
+		{
 			name:     "go test output beats tsv records",
 			input:    "ok\tgithub.com/dotcommander/html/internal/cache\t0.012s\nok\tgithub.com/dotcommander/html/internal/render\t0.034s\n",
 			wantKind: KindLog,
@@ -570,6 +578,20 @@ func TestAnalyze_PlainDiffFileCountExcludesHunkContent(t *testing.T) {
 	}
 	if analysis.Stats.Files != 1 {
 		t.Fatalf("files = %d, want 1", analysis.Stats.Files)
+	}
+}
+
+func TestAnalyze_PlainDiffFileCountHandlesMultipleFiles(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("--- a.txt\n+++ a.txt\n@@ -1 +1 @@\n-old\n+new\n--- b.txt\n+++ b.txt\n@@ -1 +1 @@\n-left\n+right\n")
+	analysis := Analyze(src, "change.diff")
+
+	if analysis.Kind != KindDiff {
+		t.Fatalf("kind = %s, want %s; reasons=%v", analysis.Kind, KindDiff, analysis.Reasons)
+	}
+	if analysis.Stats.Files != 2 {
+		t.Fatalf("files = %d, want 2", analysis.Stats.Files)
 	}
 }
 
@@ -832,6 +854,25 @@ func TestPlan_TableOverrideRequiresRecordRows(t *testing.T) {
 	}
 	if len(p.Components) != 2 || p.Components[0].Type != ComponentSummary || p.Components[1].Type != ComponentPreformatted {
 		t.Fatalf("components = %#v, want summary and preformatted fallback", p.Components)
+	}
+}
+
+func TestPlan_BinaryUsesSummaryAndSafePreviewComponent(t *testing.T) {
+	t.Parallel()
+
+	analysis, p := Plan(t.Context(), []byte{0x89, 'P', 'N', 'G', 0x00}, Options{SourceName: "logo.png", Planner: PlannerOff})
+
+	if analysis.Kind != KindBinary {
+		t.Fatalf("analysis kind = %s, want %s", analysis.Kind, KindBinary)
+	}
+	if p.Kind != KindBinary {
+		t.Fatalf("plan kind = %s, want %s", p.Kind, KindBinary)
+	}
+	if len(p.Components) != 2 || p.Components[0].Type != ComponentSummary || p.Components[1].Type != ComponentPreformatted {
+		t.Fatalf("components = %#v, want summary and preformatted binary preview", p.Components)
+	}
+	if p.Components[1].Title != "Binary" {
+		t.Fatalf("binary component title = %q, want Binary", p.Components[1].Title)
 	}
 }
 
@@ -1362,5 +1403,18 @@ func TestPlan_LLMInvalidTimeoutBypassesCachedPlan(t *testing.T) {
 	}
 	if !foundReason {
 		t.Fatalf("fallback reason should report invalid timeout, got %v", p.Reasons)
+	}
+}
+
+func TestPlan_ReviewModeOverrideForcesReviewComponent(t *testing.T) {
+	t.Parallel()
+
+	_, p := Plan(t.Context(), []byte(`[{"name":"a"},{"name":"b"}]`), Options{Mode: ModeOverrideReview, Planner: PlannerOff})
+
+	if p.Layout != LayoutReview {
+		t.Fatalf("layout = %s, want %s", p.Layout, LayoutReview)
+	}
+	if len(p.Components) != 1 || p.Components[0].Type != ComponentReview {
+		t.Fatalf("components = %#v, want review component", p.Components)
 	}
 }

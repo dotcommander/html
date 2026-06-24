@@ -102,7 +102,7 @@ func wrapPage(title, body string, opts Options) string {
   </style>
 </head>
 <body>
-  <div class="theme-controls">
+  <div class="theme-controls" role="group" aria-label="Appearance controls">
     <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle light or dark theme" aria-pressed="false">☾</button>
     <div class="palette-switcher" aria-label="Color palette">
       <button class="palette-button" type="button" data-palette-choice="sepia" aria-label="Sepia palette" aria-pressed="false"></button>

@@ -71,7 +71,8 @@ func renderTabs(src []byte, opts Options, analysis report.Analysis, components [
 			tabindex = ` tabindex="0"`
 			hidden = ""
 		}
-		fmt.Fprintf(&buttons, `<button id="%s" type="button" role="tab" aria-selected="%s" aria-controls="%s"%s>%s</button>`, tabID, selected, panelID, tabindex, htmlpkg.EscapeString(c.Title))
+		title := htmlpkg.EscapeString(c.Title)
+		fmt.Fprintf(&buttons, `<button id="%s" type="button" role="tab" aria-selected="%s" aria-controls="%s"%s title="%s"><span>%s</span></button>`, tabID, selected, panelID, tabindex, title, title)
 		part, err := renderReportComponent(src, opts, analysis, c)
 		if err != nil {
 			return "", err
@@ -110,6 +111,11 @@ func headingTitle(chunk string) string {
 }
 
 var articleHeadingRe = regexp.MustCompile(`(?i)<h([1-6])(?:\s[^>]*)?>`)
+var articleImageRe = regexp.MustCompile(`(?i)<img(?:\s|>)`)
+var articleTableRe = regexp.MustCompile(`(?i)<table(?:\s|>)`)
+var articleCodeBlockRe = regexp.MustCompile(`(?i)<pre(?:\s|>)`)
+var articleTaskRe = regexp.MustCompile(`(?i)<input\b[^>]*\btype="checkbox"`)
+var articleBlockquoteRe = regexp.MustCompile(`(?i)<blockquote(?:\s|>)`)
 
 func articleView(src []byte, opts Options) (string, error) {
 	mdOpts := opts
@@ -138,6 +144,21 @@ func articleOverview(src []byte, articleHTML string) string {
 	}
 	if sections > 0 {
 		items = append(items, [2]string{"Sections", strconv.Itoa(sections)})
+	}
+	if images := len(articleImageRe.FindAllStringIndex(articleHTML, -1)); images > 0 {
+		items = append(items, [2]string{"Images", strconv.Itoa(images)})
+	}
+	if tables := len(articleTableRe.FindAllStringIndex(articleHTML, -1)); tables > 0 {
+		items = append(items, [2]string{"Tables", strconv.Itoa(tables)})
+	}
+	if codeBlocks := len(articleCodeBlockRe.FindAllStringIndex(articleHTML, -1)); codeBlocks > 0 {
+		items = append(items, [2]string{"Code blocks", strconv.Itoa(codeBlocks)})
+	}
+	if tasks := len(articleTaskRe.FindAllStringIndex(articleHTML, -1)); tasks > 0 {
+		items = append(items, [2]string{"Tasks", strconv.Itoa(tasks)})
+	}
+	if quotes := len(articleBlockquoteRe.FindAllStringIndex(articleHTML, -1)); quotes > 0 {
+		items = append(items, [2]string{"Quotes", strconv.Itoa(quotes)})
 	}
 	var b strings.Builder
 	b.WriteString(`<dl class="article-overview" aria-label="Article overview">`)
@@ -214,7 +235,7 @@ func renderSlides(src []byte, opts Options, analysis report.Analysis, components
 		fmt.Fprintf(&b, `<section class="report-slide" aria-label="Slide %d of %d: %s"><div class="report-slide-count">%d / %d</div>%s</section>`, i+1, total, htmlpkg.EscapeString(u.title), i+1, total, u.html)
 	}
 	if total > 1 {
-		fmt.Fprintf(&b, `<div class="report-slide-controls" aria-label="Slide controls"><button type="button" data-slide-prev>Previous</button><span data-slide-status>1 / %d</span><button type="button" data-slide-next>Next</button></div>`, total)
+		fmt.Fprintf(&b, `<nav class="report-slide-controls" aria-label="Slide controls"><button type="button" data-slide-prev aria-label="Previous slide" title="Previous slide"><span aria-hidden="true">‹</span></button><span data-slide-status>1 / %d</span><button type="button" data-slide-next aria-label="Next slide" title="Next slide"><span aria-hidden="true">›</span></button></nav>`, total)
 	}
 	b.WriteString(`</div>`)
 	return b.String(), nil
@@ -230,6 +251,9 @@ func renderReportComponent(src []byte, opts Options, analysis report.Analysis, c
 		}
 		return article, nil
 	case report.ComponentPreformatted:
+		if analysis.Kind == report.KindBinary {
+			return `<section class="report-section"><h2>` + title + `</h2>` + binaryView(src, analysis) + `</section>`, nil
+		}
 		if analysis.Kind == report.KindLog || strings.EqualFold(c.Title, "Log") {
 			return `<section class="report-section"><h2>` + title + `</h2>` + logView(src) + `</section>`, nil
 		}
@@ -243,6 +267,8 @@ func renderReportComponent(src []byte, opts Options, analysis report.Analysis, c
 		return `<section class="report-section"><h2>` + title + `</h2>` + dataTable(src, analysis) + `</section>`, nil
 	case report.ComponentRecordCards:
 		return `<section class="report-section"><h2>` + title + `</h2>` + recordCards(src, analysis) + `</section>`, nil
+	case report.ComponentReview:
+		return `<section class="report-section"><h2>` + title + `</h2>` + reviewCards(src, analysis) + `</section>`, nil
 	case report.ComponentDiffView:
 		return `<section class="report-section"><h2>` + title + `</h2>` + diffView(src) + `</section>`, nil
 	case report.ComponentFileTree:
@@ -299,6 +325,77 @@ func textOverview(src []byte) string {
 	return b.String()
 }
 
+func binaryView(src []byte, analysis report.Analysis) string {
+	var b strings.Builder
+	b.WriteString(binaryOverview(src, analysis))
+	b.WriteString(`<pre class="binary-preview" aria-label="Binary byte preview"><code>`)
+	for i := 0; i < len(src) && i < 128; i += 16 {
+		end := i + 16
+		if end > len(src) {
+			end = len(src)
+		}
+		fmt.Fprintf(&b, `%08x  %-47s  |%s|`, i, hexBytes(src[i:end]), asciiBytes(src[i:end]))
+		if end < len(src) && end < 128 {
+			b.WriteByte('\n')
+		}
+	}
+	if len(src) > 128 {
+		b.WriteByte('\n')
+		b.WriteString(`... `)
+		b.WriteString(strconv.Itoa(len(src) - 128))
+		b.WriteString(` more bytes`)
+	}
+	b.WriteString(`</code></pre>`)
+	return b.String()
+}
+
+func binaryOverview(src []byte, analysis report.Analysis) string {
+	items := [][2]string{
+		{"Bytes", strconv.Itoa(len(src))},
+		{"Preview", strconv.Itoa(min(len(src), 128)) + " bytes"},
+	}
+	if analysis.Stats.Lines > 0 {
+		items = append(items, [2]string{"Lines", strconv.Itoa(analysis.Stats.Lines)})
+	}
+	if len(analysis.Reasons) > 0 {
+		items = append(items, [2]string{"Reason", strings.Join(analysis.Reasons, ", ")})
+	}
+	var b strings.Builder
+	b.WriteString(`<dl class="binary-overview" aria-label="Binary overview">`)
+	for _, item := range items {
+		b.WriteString(`<div><dt>`)
+		b.WriteString(htmlpkg.EscapeString(item[0]))
+		b.WriteString(`</dt><dd>`)
+		b.WriteString(htmlpkg.EscapeString(item[1]))
+		b.WriteString(`</dd></div>`)
+	}
+	b.WriteString(`</dl>`)
+	return b.String()
+}
+
+func hexBytes(src []byte) string {
+	var b strings.Builder
+	for i, by := range src {
+		if i > 0 {
+			b.WriteByte(' ')
+		}
+		fmt.Fprintf(&b, `%02x`, by)
+	}
+	return b.String()
+}
+
+func asciiBytes(src []byte) string {
+	var b strings.Builder
+	for _, by := range src {
+		if by >= 0x20 && by <= 0x7e {
+			b.WriteByte(by)
+			continue
+		}
+		b.WriteByte('.')
+	}
+	return b.String()
+}
+
 func jsonView(src []byte, analysis report.Analysis) string {
 	var pretty bytes.Buffer
 	body := src
@@ -307,9 +404,14 @@ func jsonView(src []byte, analysis report.Analysis) string {
 	}
 	overview := jsonOverview(analysis.Data)
 	if overview == "" {
-		return rawPre(body)
+		return jsonPre(body)
 	}
-	return overview + rawPre(body)
+	return overview + jsonPre(body)
+}
+
+func jsonPre(src []byte) string {
+	clean := reANSI.ReplaceAll(src, nil)
+	return `<pre class="json-source"><code class="language-json">` + htmlpkg.EscapeString(string(clean)) + `</code></pre>`
 }
 
 func jsonOverview(data any) string {
@@ -371,7 +473,12 @@ func logView(src []byte) string {
 	if len(lines) == 0 {
 		return rawPre(src)
 	}
+	counts := logSeverityCounts{}
+	for _, line := range lines {
+		counts.add(logSeverity(line))
+	}
 	var b strings.Builder
+	b.WriteString(logOverview(counts))
 	b.WriteString(`<ol class="log-lines">`)
 	for _, line := range lines {
 		text := htmlpkg.EscapeString(line)
@@ -385,6 +492,60 @@ func logView(src []byte) string {
 		fmt.Fprintf(&b, `<li class="log-line log-%s"><span class="log-level">%s</span><span class="log-message">%s</span></li>`, severity, strings.ToUpper(severity), text)
 	}
 	b.WriteString(`</ol>`)
+	return b.String()
+}
+
+type logSeverityCounts struct {
+	Lines int
+	Debug int
+	Info  int
+	Warn  int
+	Error int
+	Fatal int
+}
+
+func (c *logSeverityCounts) add(severity string) {
+	c.Lines++
+	switch severity {
+	case "debug":
+		c.Debug++
+	case "info":
+		c.Info++
+	case "warn":
+		c.Warn++
+	case "error":
+		c.Error++
+	case "fatal":
+		c.Fatal++
+	}
+}
+
+func logOverview(counts logSeverityCounts) string {
+	items := [][2]string{{"Lines", strconv.Itoa(counts.Lines)}}
+	for _, item := range []struct {
+		label string
+		count int
+	}{
+		{"Errors", counts.Error},
+		{"Warnings", counts.Warn},
+		{"Info", counts.Info},
+		{"Debug", counts.Debug},
+		{"Fatal", counts.Fatal},
+	} {
+		if item.count > 0 {
+			items = append(items, [2]string{item.label, strconv.Itoa(item.count)})
+		}
+	}
+	var b strings.Builder
+	b.WriteString(`<dl class="log-overview" aria-label="Log overview">`)
+	for _, item := range items {
+		b.WriteString(`<div><dt>`)
+		b.WriteString(htmlpkg.EscapeString(item[0]))
+		b.WriteString(`</dt><dd>`)
+		b.WriteString(htmlpkg.EscapeString(item[1]))
+		b.WriteString(`</dd></div>`)
+	}
+	b.WriteString(`</dl>`)
 	return b.String()
 }
 
@@ -402,8 +563,32 @@ func logSeverity(line string) string {
 	case strings.Contains(upper, "DEBUG"):
 		return "debug"
 	default:
+		if status, ok := accessLogStatus(line); ok {
+			switch {
+			case status >= 500:
+				return "error"
+			case status >= 400:
+				return "warn"
+			case status >= 200:
+				return "info"
+			}
+		}
 		return ""
 	}
+}
+
+var accessLogStatusRe = regexp.MustCompile(`"\s+([1-5][0-9]{2})\b`)
+
+func accessLogStatus(line string) (int, bool) {
+	m := accessLogStatusRe.FindStringSubmatch(line)
+	if m == nil {
+		return 0, false
+	}
+	status, err := strconv.Atoi(m[1])
+	if err != nil {
+		return 0, false
+	}
+	return status, true
 }
 
 type transcriptTurn struct {
@@ -416,7 +601,12 @@ func transcriptView(src []byte) string {
 	if len(turns) == 0 {
 		return rawPre(src)
 	}
+	speakers := map[string]bool{}
+	for _, turn := range turns {
+		speakers[turn.Speaker] = true
+	}
 	var b strings.Builder
+	b.WriteString(transcriptOverview(len(turns), len(speakers)))
 	b.WriteString(`<ol class="transcript-turns">`)
 	for _, turn := range turns {
 		b.WriteString(`<li class="transcript-turn"><span class="transcript-speaker">`)
@@ -430,6 +620,24 @@ func transcriptView(src []byte) string {
 		b.WriteString(`</div></li>`)
 	}
 	b.WriteString(`</ol>`)
+	return b.String()
+}
+
+func transcriptOverview(turns, speakers int) string {
+	items := [][2]string{
+		{"Turns", strconv.Itoa(turns)},
+		{"Speakers", strconv.Itoa(speakers)},
+	}
+	var b strings.Builder
+	b.WriteString(`<dl class="transcript-overview" aria-label="Transcript overview">`)
+	for _, item := range items {
+		b.WriteString(`<div><dt>`)
+		b.WriteString(htmlpkg.EscapeString(item[0]))
+		b.WriteString(`</dt><dd>`)
+		b.WriteString(htmlpkg.EscapeString(item[1]))
+		b.WriteString(`</dd></div>`)
+	}
+	b.WriteString(`</dl>`)
 	return b.String()
 }
 
@@ -502,6 +710,7 @@ func codeOverview(src []byte, opts Options, analysis report.Analysis) string {
 	if opts.SourceName != "" {
 		items = append(items, [2]string{"Source", opts.SourceName})
 	}
+	items = append(items, [2]string{"Renderer", codeRenderer(src, opts)})
 	if analysis.Stats.Lines > 0 {
 		items = append(items, [2]string{"Lines", strconv.Itoa(analysis.Stats.Lines)})
 	}
@@ -519,6 +728,16 @@ func codeOverview(src []byte, opts Options, analysis report.Analysis) string {
 	}
 	b.WriteString(`</dl>`)
 	return b.String()
+}
+
+func codeRenderer(src []byte, opts Options) string {
+	if reANSI.Match(src) {
+		return "ANSI"
+	}
+	if pickLexer(opts.Lang, opts.SourceName, src) != nil {
+		return "Chroma"
+	}
+	return "Plain text"
 }
 
 func summary(a report.Analysis) string {
@@ -590,6 +809,7 @@ func dataTable(src []byte, analysis report.Analysis) string {
 		}
 		b.WriteString(`</tr>`)
 	}
+	fmt.Fprintf(&b, `<tr class="report-empty-row" data-report-empty-row%s><td colspan="%d">%s</td></tr>`, hiddenAttr(len(rows) > 0), len(headers), emptyTableText(len(rows) == 0))
 	b.WriteString(`</tbody></table></div>`)
 	return b.String()
 }
@@ -601,6 +821,20 @@ func rowStatusText(n int) string {
 	return fmt.Sprintf("%d rows", n)
 }
 
+func hiddenAttr(hidden bool) string {
+	if hidden {
+		return ` hidden`
+	}
+	return ""
+}
+
+func emptyTableText(emptyInput bool) string {
+	if emptyInput {
+		return "No rows"
+	}
+	return "No rows match"
+}
+
 func recordCards(src []byte, analysis report.Analysis) string {
 	headers, rows := tableRows(src, analysis)
 	if len(headers) == 0 {
@@ -610,23 +844,66 @@ func recordCards(src []byte, analysis report.Analysis) string {
 		return `<p class="record-empty" aria-live="polite">No records</p>`
 	}
 	labels := headerLabels(headers)
-	var b strings.Builder
-	b.WriteString(`<div class="record-cards">`)
+	cards := make([]recordCard, 0, len(rows))
+	stats := recordCardStats{Cards: len(rows)}
 	for i, row := range rows {
-		fmt.Fprintf(&b, `<article class="record-card"><h3>%s</h3><dl>`, recordCardTitle(i+1, labels, row))
+		card := recordCard{Title: recordCardTitle(i+1, labels, row)}
 		for j, label := range labels {
 			if j >= len(row) || strings.TrimSpace(cleanTableText(row[j])) == "" {
 				continue
 			}
+			card.Fields = append(card.Fields, recordCardField{Label: label, Value: row[j]})
+			stats.VisibleFields++
+		}
+		cards = append(cards, card)
+	}
+	var b strings.Builder
+	b.WriteString(recordCardsOverview(stats))
+	b.WriteString(`<div class="record-cards">`)
+	for _, card := range cards {
+		fmt.Fprintf(&b, `<article class="record-card"><h3>%s</h3><dl>`, card.Title)
+		for _, field := range card.Fields {
 			b.WriteString(`<div><dt>`)
-			b.WriteString(escapeTableText(label))
+			b.WriteString(escapeTableText(field.Label))
 			b.WriteString(`</dt><dd>`)
-			b.WriteString(escapeTableText(row[j]))
+			b.WriteString(escapeTableText(field.Value))
 			b.WriteString(`</dd></div>`)
 		}
 		b.WriteString(`</dl></article>`)
 	}
 	b.WriteString(`</div>`)
+	return b.String()
+}
+
+type recordCard struct {
+	Title  string
+	Fields []recordCardField
+}
+
+type recordCardField struct {
+	Label string
+	Value string
+}
+
+type recordCardStats struct {
+	Cards         int
+	VisibleFields int
+}
+
+func recordCardsOverview(stats recordCardStats) string {
+	var b strings.Builder
+	b.WriteString(`<dl class="record-cards-overview" aria-label="Record cards overview">`)
+	for _, item := range [][2]string{
+		{"Cards", strconv.Itoa(stats.Cards)},
+		{"Visible fields", strconv.Itoa(stats.VisibleFields)},
+	} {
+		b.WriteString(`<div><dt>`)
+		b.WriteString(htmlpkg.EscapeString(item[0]))
+		b.WriteString(`</dt><dd>`)
+		b.WriteString(htmlpkg.EscapeString(item[1]))
+		b.WriteString(`</dd></div>`)
+	}
+	b.WriteString(`</dl>`)
 	return b.String()
 }
 
@@ -645,6 +922,74 @@ func recordCardTitle(n int, labels, row []string) string {
 		}
 	}
 	return escapeTableText(fallback)
+}
+
+// recordID derives a stable per-record identifier for the review textarea,
+// reusing recordCardTitle's preferred-field order (name, title, id, key) and
+// falling back to the 1-based record number. The returned value is HTML-attr
+// safe (escaped) — it is emitted only inside a double-quoted attribute.
+func recordID(n int, labels, row []string) string {
+	for _, preferred := range []string{"name", "title", "id", "key"} {
+		for i, label := range labels {
+			if !strings.EqualFold(strings.TrimSpace(label), preferred) || i >= len(row) {
+				continue
+			}
+			value := strings.TrimSpace(cleanTableText(row[i]))
+			if value == "" {
+				continue
+			}
+			return htmlpkg.EscapeString(value)
+		}
+	}
+	return htmlpkg.EscapeString(fmt.Sprintf("record-%d", n))
+}
+
+// reviewCards mirrors recordCards but adds a per-record comment <textarea>
+// (keyed by recordID for localStorage persistence) and a single top-level
+// "Copy all comments" button. The interactive behavior lives in report.js.
+func reviewCards(src []byte, analysis report.Analysis) string {
+	headers, rows := tableRows(src, analysis)
+	if len(headers) == 0 {
+		return rawPre(src)
+	}
+	if len(rows) == 0 {
+		return `<p class="record-empty" aria-live="polite">No records</p>`
+	}
+	labels := headerLabels(headers)
+	type reviewItem struct {
+		card recordCard
+		id   string
+	}
+	items := make([]reviewItem, 0, len(rows))
+	stats := recordCardStats{Cards: len(rows)}
+	for i, row := range rows {
+		card := recordCard{Title: recordCardTitle(i+1, labels, row)}
+		for j, label := range labels {
+			if j >= len(row) || strings.TrimSpace(cleanTableText(row[j])) == "" {
+				continue
+			}
+			card.Fields = append(card.Fields, recordCardField{Label: label, Value: row[j]})
+			stats.VisibleFields++
+		}
+		items = append(items, reviewItem{card: card, id: recordID(i+1, labels, row)})
+	}
+	var b strings.Builder
+	b.WriteString(recordCardsOverview(stats))
+	b.WriteString(`<button type="button" class="review-copy">Copy all comments</button>`)
+	b.WriteString(`<div class="review-cards">`)
+	for _, item := range items {
+		fmt.Fprintf(&b, `<article class="review-card"><h3>%s</h3><dl>`, item.card.Title)
+		for _, field := range item.card.Fields {
+			b.WriteString(`<div><dt>`)
+			b.WriteString(escapeTableText(field.Label))
+			b.WriteString(`</dt><dd>`)
+			b.WriteString(escapeTableText(field.Value))
+			b.WriteString(`</dd></div>`)
+		}
+		fmt.Fprintf(&b, `</dl><textarea class="review-comment" data-review-id="%s" aria-label="Comment"></textarea></article>`, item.id)
+	}
+	b.WriteString(`</div>`)
+	return b.String()
 }
 
 func tableRows(src []byte, analysis report.Analysis) ([]string, [][]string) {
@@ -813,13 +1158,17 @@ func diffView(src []byte) string {
 	code.WriteString(`<pre class="diff-view"><code>`)
 	combinedPrefixCols := 0
 	inHunk := false
-	for _, line := range lines {
+	for i, line := range lines {
 		clean := string(reANSI.ReplaceAll([]byte(line), nil))
+		nextClean := ""
+		if i+1 < len(lines) {
+			nextClean = string(reANSI.ReplaceAll([]byte(lines[i+1]), nil))
+		}
 		class := "ctx"
 		switch {
 		case isDiffBoundaryLine(clean):
 			class = "file"
-			stats.files++
+			stats.addExplicitFile()
 			combinedPrefixCols = 0
 			inHunk = false
 		case strings.HasPrefix(clean, "@@"):
@@ -827,6 +1176,10 @@ func diffView(src []byte) string {
 			stats.hunks++
 			combinedPrefixCols = combinedDiffPrefixCols(clean)
 			inHunk = true
+		case inHunk && isPlainUnifiedOldFileHeader(clean, nextClean):
+			class = "file"
+			combinedPrefixCols = 0
+			inHunk = false
 		case inHunk && combinedPrefixCols > 1:
 			class = combinedDiffLineClass(clean, combinedPrefixCols)
 		case inHunk && strings.HasPrefix(clean, "+"):
@@ -841,6 +1194,7 @@ func diffView(src []byte) string {
 			class = "file"
 			combinedPrefixCols = 0
 		}
+		stats.observeLine(clean, class)
 		switch class {
 		case "add":
 			stats.additions++
@@ -856,10 +1210,44 @@ func diffView(src []byte) string {
 }
 
 type diffStats struct {
-	files     int
-	hunks     int
-	additions int
-	deletions int
+	files         int
+	hunks         int
+	additions     int
+	deletions     int
+	oldHeader     bool
+	explicitFiles bool
+}
+
+func (s *diffStats) addExplicitFile() {
+	s.files++
+	s.explicitFiles = true
+	s.oldHeader = false
+}
+
+func (s *diffStats) observeLine(line, class string) {
+	if class != "file" && class != "hunk" {
+		if strings.TrimSpace(line) != "" {
+			s.oldHeader = false
+		}
+		return
+	}
+	switch {
+	case strings.HasPrefix(line, "--- "):
+		s.oldHeader = true
+	case strings.HasPrefix(line, "+++ ") && s.oldHeader:
+		if !s.explicitFiles {
+			s.files++
+		}
+		s.oldHeader = false
+	case strings.HasPrefix(line, "@@"):
+		s.oldHeader = false
+	case isDiffBoundaryLine(line):
+		s.oldHeader = false
+	case strings.TrimSpace(line) != "":
+		if !strings.HasPrefix(line, "index ") {
+			s.oldHeader = false
+		}
+	}
 }
 
 func diffSummary(stats diffStats) string {
@@ -893,6 +1281,10 @@ func isDiffBoundaryLine(line string) bool {
 	return strings.HasPrefix(line, "diff --git") ||
 		strings.HasPrefix(line, "diff --cc") ||
 		strings.HasPrefix(line, "diff --combined")
+}
+
+func isPlainUnifiedOldFileHeader(line, nextLine string) bool {
+	return strings.HasPrefix(line, "--- ") && strings.HasPrefix(nextLine, "+++ ")
 }
 
 var diffMetadataPrefixes = []string{
@@ -954,13 +1346,54 @@ func fileTree(src []byte) string {
 	if len(lines) == 0 {
 		return rawPre(src)
 	}
-	var b strings.Builder
-	b.WriteString(`<ul class="file-tree">`)
+	entries := make([]treeEntry, 0, len(lines))
+	stats := treeStats{}
 	for _, line := range lines {
 		name, depth := treeLine(line)
-		fmt.Fprintf(&b, `<li style="--depth:%d"><span>%s</span></li>`, depth, htmlpkg.EscapeString(name))
+		entries = append(entries, treeEntry{Name: name, Depth: depth})
+		stats.add(depth)
+	}
+	var b strings.Builder
+	b.WriteString(fileTreeOverview(stats))
+	b.WriteString(`<ul class="file-tree">`)
+	for _, entry := range entries {
+		fmt.Fprintf(&b, `<li style="--depth:%d"><span>%s</span></li>`, entry.Depth, htmlpkg.EscapeString(entry.Name))
 	}
 	b.WriteString(`</ul>`)
+	return b.String()
+}
+
+type treeEntry struct {
+	Name  string
+	Depth int
+}
+
+type treeStats struct {
+	Entries  int
+	MaxDepth int
+}
+
+func (s *treeStats) add(depth int) {
+	s.Entries++
+	if depth > s.MaxDepth {
+		s.MaxDepth = depth
+	}
+}
+
+func fileTreeOverview(stats treeStats) string {
+	var b strings.Builder
+	b.WriteString(`<dl class="file-tree-overview" aria-label="File tree overview">`)
+	for _, item := range [][2]string{
+		{"Entries", strconv.Itoa(stats.Entries)},
+		{"Max depth", strconv.Itoa(stats.MaxDepth)},
+	} {
+		b.WriteString(`<div><dt>`)
+		b.WriteString(htmlpkg.EscapeString(item[0]))
+		b.WriteString(`</dt><dd>`)
+		b.WriteString(htmlpkg.EscapeString(item[1]))
+		b.WriteString(`</dd></div>`)
+	}
+	b.WriteString(`</dl>`)
 	return b.String()
 }
 

@@ -126,8 +126,8 @@ func newRootCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&output, "output", "o", "", "write the final HTML document to a stable path (\"-\" writes stdout)")
 	cmd.Flags().BoolVar(&plan, "plan", false, "print the report plan JSON without rendering")
 	cmd.Flags().BoolVar(&stdout, "stdout", false, "write the final HTML document to stdout without opening")
-	cmd.Flags().Var((*modeValue)(&mode), "mode", "report mode: auto, article, table, cards, diff, log, code, tree")
-	cmd.Flags().Var((*layoutValue)(&layout), "layout", "report layout: auto, single, tabs, slides")
+	cmd.Flags().Var((*modeValue)(&mode), "mode", "report mode: auto, article, table, cards, review, diff, log, code, tree")
+	cmd.Flags().Var((*layoutValue)(&layout), "layout", "report layout: auto, single, tabs, slides, review")
 	cmd.Flags().Var((*plannerValue)(&planner), "planner", "planner policy: off, auto, llm")
 	cmd.Flags().StringVar(&llmURL, "llm-url", reportDefaults.LLMURL, "OpenAI-compatible chat completions URL for the optional planner")
 	cmd.Flags().StringVar(&llmModel, "llm-model", reportDefaults.LLMModel, "model name for the optional planner")
@@ -166,7 +166,7 @@ func (v *modeValue) Type() string   { return "mode" }
 func (v *modeValue) Set(s string) error {
 	m := report.ModeOverride(s)
 	switch m {
-	case report.ModeOverrideAuto, report.ModeOverrideArticle, report.ModeOverrideTable, report.ModeOverrideCards, report.ModeOverrideDiff, report.ModeOverrideLog, report.ModeOverrideCode, report.ModeOverrideTree:
+	case report.ModeOverrideAuto, report.ModeOverrideArticle, report.ModeOverrideTable, report.ModeOverrideCards, report.ModeOverrideReview, report.ModeOverrideDiff, report.ModeOverrideLog, report.ModeOverrideCode, report.ModeOverrideTree:
 		*v = modeValue(m)
 		return nil
 	default:
@@ -181,7 +181,7 @@ func (v *layoutValue) Type() string   { return "layout" }
 func (v *layoutValue) Set(s string) error {
 	l := report.LayoutOverride(s)
 	switch l {
-	case report.LayoutOverrideAuto, report.LayoutOverrideSingle, report.LayoutOverrideTabs, report.LayoutOverrideSlides:
+	case report.LayoutOverrideAuto, report.LayoutOverrideSingle, report.LayoutOverrideTabs, report.LayoutOverrideSlides, report.LayoutOverrideReview:
 		*v = layoutValue(l)
 		return nil
 	default:

@@ -52,13 +52,25 @@ Run `html --help` for the full list, including the report-mode flags (`--mode`, 
 
 ## Markdown vs. plain text
 
-Piped input is auto-classified. A high-confidence structural signal — a fenced code block, a GFM table, or a setext heading — makes it Markdown; otherwise it stays plain text, so scripts, diffs, JSON, YAML, and logs are rendered faithfully rather than mangled. Binary input (a NUL byte, or >10% non-text bytes) is refused. Force the mode with `-m` / `-p`.
+Piped input is auto-classified. A high-confidence structural signal — a fenced code block, a GFM table, or a setext heading — makes it Markdown; otherwise it stays plain text, so scripts, diffs, JSON, YAML, and logs are rendered faithfully rather than mangled. Normal document rendering refuses binary input (a NUL byte, or >10% non-text bytes); report mode can render a safe hex/ascii binary preview. Force the document mode with `-m` / `-p`.
 
 Files are decided by extension: `.md` / `.markdown` → Markdown, everything else → plain.
 
 ## Output & caching
 
 Rendered pages are cached under `~/.config/html/cache/` and reused until the source changes. Use `-f` to force a re-render, or `-o <path>` to write the HTML somewhere stable to share or attach.
+
+## Browser QA
+
+Run the generated browser QA suite with:
+
+```bash
+just qa-browser
+```
+
+The suite regenerates `.work/html-qa/`, opens the generated pages through the repo-local chromedp helper at `tools/chromedp-capture`, captures desktop/mobile PNGs, and writes matching JSON metrics under `.work/html-qa/browser/`. The helper has been the reliable path for this repo: it launches a disposable Chrome profile, sets explicit viewport metrics, captures full-page screenshots, checks console errors, and records `clientWidth`/`scrollWidth` overflow evidence.
+
+`agent-browser` was tried for the same static HTML checks and failed in two ways: first on an unwritable `~/.agent-browser` socket, then with missing/empty screenshots after retrying through the shared capture helper. Prefer `just qa-browser`/chromedp for final responsive and rendered-output comparisons here, especially when validating theme controls, palette variants, generated components, image inlining, and SVG/raster display.
 
 ## Configuration (optional)
 
@@ -69,6 +81,7 @@ Rendered pages are cached under `~/.config/html/cache/` and reused until the sou
   "open_command": "firefox",   // launcher; "" = OS default (open / xdg-open / start)
   "max_width": "60rem",        // reader column width (any CSS length)
   "default_theme": "dark",     // "light" | "dark" | "auto" ("" = follow system)
+  "default_palette": "blue",   // "sepia" | "blue" | "green" | "rose" | "catppuccin" ("" = sepia)
   "toc": true                  // force a table of contents (omit = automatic for 4+ headings)
 }
 ```

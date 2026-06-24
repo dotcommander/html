@@ -76,6 +76,11 @@ func deterministicPlan(a Analysis, opts Options) ReportPlan {
 		layout = LayoutTabbedPage
 	case LayoutOverrideSlides:
 		layout = LayoutSlides
+	case LayoutOverrideReview:
+		layout = LayoutReview
+	}
+	if opts.Mode == ModeOverrideReview {
+		layout = LayoutReview
 	}
 	return ReportPlan{
 		Version:    PlanVersion,
@@ -118,6 +123,8 @@ func componentsFor(a Analysis) (Kind, Mode, []Component) {
 		return a.Kind, ModeBrief, []Component{{Type: ComponentSummary, Source: "analysis", Title: "Summary", Options: map[string]string{}}, {Type: ComponentPreformatted, Source: "input", Title: "Input", Options: map[string]string{}}}
 	case KindPlain:
 		return a.Kind, ModeBrief, []Component{{Type: ComponentSummary, Source: "analysis", Title: "Summary", Options: map[string]string{}}, {Type: ComponentPreformatted, Source: "input", Title: "Input", Options: map[string]string{}}}
+	case KindBinary:
+		return a.Kind, ModeBrief, []Component{{Type: ComponentSummary, Source: "analysis", Title: "Summary", Options: map[string]string{}}, {Type: ComponentPreformatted, Source: "input", Title: "Binary", Options: map[string]string{}}}
 	default:
 		return a.Kind, ModeBrief, []Component{{Type: ComponentPreformatted, Source: "input", Title: "Input", Options: map[string]string{}}}
 	}
@@ -140,6 +147,11 @@ func overrideComponents(mode ModeOverride, a Analysis) (Kind, Mode, []Component)
 			return componentsFor(a)
 		}
 		return a.Kind, ModeDataBrowser, []Component{{Type: ComponentRecordCards, Source: "records", Title: "Details", Options: map[string]string{"primary": "true"}}}
+	case ModeOverrideReview:
+		if !hasRecordRows(a.Kind) {
+			return componentsFor(a)
+		}
+		return a.Kind, ModeReview, []Component{{Type: ComponentReview, Source: "records", Title: "Review", Options: map[string]string{"primary": "true"}}}
 	case ModeOverrideDiff:
 		if a.Kind != KindDiff {
 			return componentsFor(a)

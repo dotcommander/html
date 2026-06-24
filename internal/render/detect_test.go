@@ -1,6 +1,9 @@
 package render
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestDetect(t *testing.T) {
 	t.Parallel()
@@ -13,6 +16,7 @@ func TestDetect(t *testing.T) {
 		{"nul byte", "abc\x00def", KindBinary},
 		{"png header", "\x89PNG\r\n\x1a\n\x00\x00\x00", KindBinary},
 		{"control blob", string([]byte{0x01, 0x02, 0x03, 0x04, 0x05, 'a'}), KindBinary},
+		{"single bell remains text", "hello\a world with mostly text\n", KindPlain},
 		// Plain — command output, data, code, config: must never be Markdown.
 		{"tree output", ".\n├── cmd\n│   └── html\n└── internal\n", KindPlain},
 		{"ls -la", "total 8\ndrwxr-xr-x  4 u g 128 .\n-rw-r--r--  1 u g 10 a.txt\n", KindPlain},
@@ -32,16 +36,24 @@ func TestDetect(t *testing.T) {
 		{"dash divider", "Results\n--------------------\nrow 1\nrow 2\n", KindPlain},
 		{"mysql box table", "+----+----+\n| a  | b  |\n+----+----+\n", KindPlain},
 		{"yaml doc separator", "---\nname: x\nitems: [a, b]\n", KindPlain},
+		{"toml array", "name = \"html\"\nitems = [\"render\", \"verify\"]\n", KindPlain},
+		{"pipe prose without delimiter", "name | status\nalpha | ready\nbeta | review\n", KindPlain},
+		{"markdown after scan window", strings.Repeat("plain line\n", detectScanLines+4) + "# Late Heading\n\nbody\n", KindPlain},
 		// Robustness guards: ambiguous-but-weak cues stay plain.
 		{"changelog bullets only", "- fixed a bug\n- added a feature\n- removed cruft\n", KindPlain},
 		{"log hash line", "# starting server on :8080\nlistening\n", KindPlain},
 		{"lone heading + prose", "# Title\n\nsome ordinary prose paragraph here\n", KindMarkdown},
 		{"link and emphasis only", "see [docs](http://x) and **bold** text here\n", KindPlain},
+		{"greater-than comparator text", "value > threshold\ncount > 10\n", KindPlain},
 		// Markdown — high-confidence structural signals.
 		{"readme with fence", "# Title\n\nText.\n\n```go\nfmt.Println()\n```\n", KindMarkdown},
+		{"crlf atx heading", "# Title\r\n\r\nbody text\r\n", KindMarkdown},
 		{"tilde fence", "~~~\ncode block\n~~~\n", KindMarkdown},
+		{"indented fence", "   ```sh\necho hi\n```\n", KindMarkdown},
 		{"gfm table", "| a | b |\n|---|---|\n| 1 | 2 |\n", KindMarkdown},
+		{"gfm table without edge pipes", "a | b\n--- | ---\n1 | 2\n", KindMarkdown},
 		{"gfm task list", "- [x] ship renderer\n- [ ] verify screenshots\n", KindMarkdown},
+		{"multi-line blockquote", "> Keep generated pages self-contained.\n> Verify browser output.\n", KindMarkdown},
 		{"atx heading", "# Title\n\nbody text\n", KindMarkdown},
 		{"setext equals", "Title\n=====\n\nbody text\n", KindMarkdown},
 		{"setext dash heading", "Title\n-----\n\nbody text\n", KindMarkdown},

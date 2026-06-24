@@ -118,6 +118,33 @@ func TestRun_ModeCodeForcesCodeOverview(t *testing.T) {
 	assert.NotContains(t, html, `class="report-text"`)
 }
 
+func TestRun_ReportBinaryOutputUsesSafePreview(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	src := filepath.Join(dir, "logo.bin")
+	out := filepath.Join(dir, "binary.html")
+	require.NoError(t, os.WriteFile(src, []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0x00, 0xff, 'h', 't', 'm', 'l'}, 0o644))
+
+	res, err := RunWithResult(Options{
+		File:    src,
+		Output:  out,
+		Report:  true,
+		Planner: report.PlannerOff,
+		NoOpen:  true,
+	})
+	require.NoError(t, err)
+	require.Equal(t, out, res.Path)
+
+	html := readRenderedFile(t, out)
+	assert.Contains(t, html, `<dt>Kind</dt><dd>binary</dd>`)
+	assert.Contains(t, html, `<dl class="binary-overview" aria-label="Binary overview">`)
+	assert.Contains(t, html, `<dt>Bytes</dt><dd>14</dd>`)
+	assert.Contains(t, html, `<pre class="binary-preview" aria-label="Binary byte preview"><code>`)
+	assert.Contains(t, html, `00000000  89 50 4e 47 0d 0a 1a 0a 00 ff 68 74 6d 6c`)
+	assert.NotContains(t, html, "\x00")
+}
+
 func TestRun_ReportOutputCoversRepresentativeKinds(t *testing.T) {
 	t.Parallel()
 
@@ -193,6 +220,13 @@ func TestRun_ReportOutputCoversRepresentativeKinds(t *testing.T) {
 			want:     []string{`<dt>Kind</dt><dd>log</dd>`, `<h2>Log</h2>`, `class="log-lines"`, `class="log-line log-error"`},
 		},
 		{
+			name: "access-log",
+			input: "127.0.0.1 - - [16/Jun/2026:12:00:00 -0400] \"GET /index.html HTTP/1.1\" 200 1234\n" +
+				"127.0.0.1 - - [16/Jun/2026:12:00:01 -0400] \"POST /api HTTP/1.1\" 500 42\n",
+			fileName: "access.log",
+			want:     []string{`<dt>Kind</dt><dd>log</dd>`, `http access log markers`, `<dt>Errors</dt><dd>1</dd>`, `<dt>Info</dt><dd>1</dd>`, `class="log-line log-error"`},
+		},
+		{
 			name:     "transcript",
 			input:    "Host: Welcome back.\nGuest: Thanks for having me.\nHost: Let's begin.\n",
 			fileName: "transcript.txt",
@@ -202,7 +236,7 @@ func TestRun_ReportOutputCoversRepresentativeKinds(t *testing.T) {
 			name:     "mixed",
 			input:    "Notes\n- check deploy\n\nPayload\n{\"ok\":true}\n\nERROR failed\n",
 			fileName: "mixed.txt",
-			want:     []string{`<dt>Kind</dt><dd>mixed</dd>`, `multiple weak format signals`, `>Input</button>`, `class="text-overview"`},
+			want:     []string{`<dt>Kind</dt><dd>mixed</dd>`, `multiple weak format signals`, `title="Input"><span>Input</span></button>`, `class="text-overview"`},
 		},
 		{
 			name:     "plain",

@@ -37,6 +37,7 @@ const (
 	LayoutSinglePage Layout = "single-page"
 	LayoutTabbedPage Layout = "tabbed-page"
 	LayoutSlides     Layout = "slides-page"
+	LayoutReview     Layout = "review-page"
 )
 
 type Mode string
@@ -64,6 +65,7 @@ const (
 	ComponentTOC          ComponentType = "toc"
 	ComponentSummary      ComponentType = "summary"
 	ComponentRawJSON      ComponentType = "raw-json"
+	ComponentReview       ComponentType = "review"
 )
 
 type Stats struct {
@@ -115,6 +117,7 @@ const (
 	ModeOverrideArticle ModeOverride = "article"
 	ModeOverrideTable   ModeOverride = "table"
 	ModeOverrideCards   ModeOverride = "cards"
+	ModeOverrideReview  ModeOverride = "review"
 	ModeOverrideDiff    ModeOverride = "diff"
 	ModeOverrideLog     ModeOverride = "log"
 	ModeOverrideCode    ModeOverride = "code"
@@ -128,6 +131,7 @@ const (
 	LayoutOverrideSingle LayoutOverride = "single"
 	LayoutOverrideTabs   LayoutOverride = "tabs"
 	LayoutOverrideSlides LayoutOverride = "slides"
+	LayoutOverrideReview LayoutOverride = "review"
 )
 
 type PlannerMode string
@@ -225,7 +229,7 @@ func validKind(v Kind) bool {
 }
 
 func validLayout(v Layout) bool {
-	return v == LayoutSinglePage || v == LayoutTabbedPage || v == LayoutSlides
+	return v == LayoutSinglePage || v == LayoutTabbedPage || v == LayoutSlides || v == LayoutReview
 }
 
 func validMode(v Mode) bool {
@@ -238,7 +242,7 @@ func validMode(v Mode) bool {
 
 func validComponent(v ComponentType) bool {
 	switch v {
-	case ComponentArticle, ComponentPreformatted, ComponentCodeBlock, ComponentDataTable, ComponentRecordCards, ComponentDiffView, ComponentFileTree, ComponentSummary, ComponentRawJSON:
+	case ComponentArticle, ComponentPreformatted, ComponentCodeBlock, ComponentDataTable, ComponentRecordCards, ComponentDiffView, ComponentFileTree, ComponentSummary, ComponentRawJSON, ComponentReview:
 		return true
 	}
 	return false
@@ -252,7 +256,7 @@ func componentAllowedForKind(kind Kind, typ ComponentType) bool {
 		return kind == KindMarkdown
 	case ComponentCodeBlock:
 		return true
-	case ComponentDataTable, ComponentRecordCards:
+	case ComponentDataTable, ComponentRecordCards, ComponentReview:
 		return kind == KindJSONRecords || kind == KindCSVRecords || kind == KindTSVRecords || kind == KindTableRecords
 	case ComponentDiffView:
 		return kind == KindDiff
@@ -278,7 +282,7 @@ func sourceAllowedForComponent(typ ComponentType, source string) bool {
 	switch typ {
 	case ComponentSummary:
 		return source == "analysis"
-	case ComponentDataTable, ComponentRecordCards:
+	case ComponentDataTable, ComponentRecordCards, ComponentReview:
 		return source == "records"
 	default:
 		return source == "input"

@@ -51,6 +51,19 @@ func TestInlineImage_PercentEncodedLocalPath(t *testing.T) {
 	assert.NotEqual(t, fpBefore, ImageDependencyFingerprint(src, tmp))
 }
 
+func TestInlineImage_LocalSVG(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	svg := `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20"><rect width="40" height="20" fill="#2563eb"/></svg>`
+	require.NoError(t, os.WriteFile(filepath.Join(tmp, "badge.svg"), []byte(svg), 0o644))
+
+	got, err := Render([]byte("![badge](badge.svg)\n"), Options{SourceDir: tmp, FallbackTitle: "t"})
+	require.NoError(t, err)
+	assert.Contains(t, got, "data:image/svg+xml;base64,")
+	assert.NotContains(t, got, `src="badge.svg"`)
+}
+
 func TestInlineImage_RemoteUnchanged(t *testing.T) {
 	t.Parallel()
 

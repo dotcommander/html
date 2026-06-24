@@ -463,10 +463,51 @@ body::before {
   content: "▼";
 }
 
+.report-empty-row td {
+  padding: 1.2rem;
+  color: var(--muted);
+  text-align: center;
+  background: color-mix(in srgb, var(--panel-bg) 70%, var(--paper));
+}
+
 .record-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
   gap: 0.8rem;
+}
+
+.record-cards-overview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0 0 0.75rem;
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 0.82rem;
+}
+
+.record-cards-overview div {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 1.7rem;
+  padding: 0.22rem 0.55rem;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.record-cards-overview dt,
+.record-cards-overview dd {
+  margin: 0;
+}
+
+.record-cards-overview dt {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.record-cards-overview dd {
+  color: var(--muted);
 }
 
 .record-empty {
@@ -608,6 +649,21 @@ body::before {
   color: var(--muted);
 }
 
+.markdown-body pre.json-source {
+  max-width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-x: visible;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.markdown-body pre.json-source code {
+  white-space: inherit;
+  overflow-wrap: inherit;
+}
+
 .code-overview {
   display: flex;
   flex-wrap: wrap;
@@ -710,6 +766,116 @@ body::before {
   color: var(--muted);
 }
 
+.binary-overview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0 0 0.75rem;
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 0.82rem;
+}
+
+.binary-overview div {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 1.7rem;
+  padding: 0.22rem 0.55rem;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.binary-overview dt,
+.binary-overview dd {
+  margin: 0;
+}
+
+.binary-overview dt {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.binary-overview dd {
+  color: var(--muted);
+}
+
+.binary-preview {
+  max-width: 100%;
+  overflow-x: auto;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.transcript-overview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0 0 0.75rem;
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 0.82rem;
+}
+
+.transcript-overview div {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 1.7rem;
+  padding: 0.22rem 0.55rem;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.transcript-overview dt,
+.transcript-overview dd {
+  margin: 0;
+}
+
+.transcript-overview dt {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.transcript-overview dd {
+  color: var(--muted);
+}
+
+.log-overview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0 0 0.75rem;
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 0.82rem;
+}
+
+.log-overview div {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 1.7rem;
+  padding: 0.22rem 0.55rem;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.log-overview dt,
+.log-overview dd {
+  margin: 0;
+}
+
+.log-overview dt {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.log-overview dd {
+  color: var(--muted);
+}
+
 .markdown-body pre.report-text {
   overflow-x: visible;
 }
@@ -717,6 +883,47 @@ body::before {
 .markdown-body pre.report-text code {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.markdown-body pre.chroma code,
+.markdown-body pre.chroma .line,
+.markdown-body pre.chroma .cl {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.file-tree-overview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0 0 0.75rem;
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 0.82rem;
+}
+
+.file-tree-overview div {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 1.7rem;
+  padding: 0.22rem 0.55rem;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.file-tree-overview dt,
+.file-tree-overview dd {
+  margin: 0;
+}
+
+.file-tree-overview dt {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.file-tree-overview dd {
+  color: var(--muted);
 }
 
 .file-tree {
@@ -866,6 +1073,12 @@ body::before {
 }
 
 .report-tab-list button {
+  min-width: 6.5rem;
+  max-width: min(16rem, 100%);
+  min-height: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 0.45rem 0.65rem;
   color: var(--text);
   background: transparent;
@@ -873,6 +1086,13 @@ body::before {
   border-bottom: 2px solid transparent;
   font: 700 0.9rem ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   cursor: pointer;
+}
+
+.report-tab-list button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .report-tab-list button[aria-selected="true"] {
@@ -922,13 +1142,24 @@ body::before {
 }
 
 .report-slide-controls button {
-  min-height: 2rem;
-  padding: 0.35rem 0.65rem;
+  width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  padding: 0;
   color: var(--text);
   background: var(--paper);
   border: 1px solid var(--border);
   border-radius: 6px;
   cursor: pointer;
+}
+
+.report-slide-controls button span {
+  display: block;
+  font-size: 1.25rem;
+  line-height: 1;
 }
 
 .report-slide-controls button:disabled {
@@ -1088,58 +1319,58 @@ body::before {
   top: 1rem;
   right: 1rem;
   z-index: 10;
-  display: grid;
-  justify-items: end;
-  gap: 0.45rem;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: 0.24rem;
+  padding: 0.28rem;
+  min-width: max-content;
+  background: color-mix(in srgb, var(--paper) 92%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 0.6rem 1.5rem rgba(0, 0, 0, 0.09);
+  backdrop-filter: blur(10px);
 }
 
-.theme-toggle {
-  width: 2rem;
-  height: 2rem;
+.theme-toggle,
+.palette-button {
+  width: 1.62rem;
+  height: 1.62rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
   padding: 0;
+  box-sizing: border-box;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.theme-toggle {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 1rem;
   line-height: 1;
   color: var(--text);
-  background: var(--paper);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  cursor: pointer;
-  opacity: 0.7;
-  transition: opacity 0.15s ease, background 0.15s ease;
+  border-radius: 5px;
+  opacity: 0.82;
+  transition: opacity 0.15s ease, background 0.15s ease, border-color 0.15s ease;
   user-select: none;
 }
 
 .palette-switcher {
-  display: flex;
-  gap: 0.25rem;
-  padding: 0.25rem;
-  background: color-mix(in srgb, var(--paper) 90%, transparent);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.08);
+  display: contents;
 }
 
 .palette-button {
-  width: 1.35rem;
-  height: 1.35rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 1px solid var(--border);
   border-radius: 5px;
-  background: var(--paper);
-  cursor: pointer;
 }
 
 .palette-button::before {
   content: "";
-  width: 0.78rem;
-  height: 0.78rem;
+  width: 0.82rem;
+  height: 0.82rem;
   border-radius: 3px;
   background: var(--accent);
 }
@@ -1171,9 +1402,10 @@ body::before {
 
 
 /* ── Tables ───────────────────────────────────────────────────────────────── */
-.markdown-body table {
+.markdown-body table:not(.report-table) {
   border-collapse: collapse;
-  width: 100%;
+  width: max-content;
+  max-width: 100%;
   margin-bottom: 1.4em;
   font-size: 0.95em;
   background: var(--paper);
@@ -1182,21 +1414,21 @@ body::before {
   overflow: hidden;
 }
 
-.markdown-body th,
-.markdown-body td {
+.markdown-body table:not(.report-table) th,
+.markdown-body table:not(.report-table) td {
   padding: 6px 13px;
   border: 1px solid var(--border);
   text-align: left;
   vertical-align: top;
 }
 
-.markdown-body thead th {
+.markdown-body table:not(.report-table) thead th {
   background: var(--panel-bg);
   font-weight: 600;
   color: color-mix(in srgb, var(--text) 85%, var(--accent));
 }
 
-.markdown-body tbody tr:nth-child(even) {
+.markdown-body table:not(.report-table) tbody tr:nth-child(even) {
   background: color-mix(in srgb, var(--code-bg) 60%, transparent);
 }
 
@@ -1216,8 +1448,9 @@ body::before {
     font-size: clamp(1.85rem, 8vw, 2.2rem);
   }
 
-  .markdown-body table {
+  .markdown-body table:not(.report-table) {
     display: block;
+    width: max-content;
     max-width: 100%;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
@@ -1351,11 +1584,13 @@ body::before {
 }
 
 /* ── Task lists ───────────────────────────────────────────────────────────── */
-.markdown-body .task-list-item {
+.markdown-body .task-list-item,
+.markdown-body li:has(> input[type="checkbox"]) {
   list-style: none;
 }
 
-.markdown-body .task-list-item input[type="checkbox"] {
+.markdown-body .task-list-item input[type="checkbox"],
+.markdown-body li > input[type="checkbox"] {
   accent-color: var(--accent);
   margin-right: 0.5em;
   vertical-align: middle;
@@ -1395,16 +1630,14 @@ body::before {
   .theme-controls {
     top: 0.75rem;
     right: 0.75rem;
-  }
-
-  .palette-switcher {
     gap: 0.2rem;
-    padding: 0.2rem;
+    padding: 0.24rem;
   }
 
+  .theme-toggle,
   .palette-button {
-    width: 1.2rem;
-    height: 1.2rem;
+    width: 1.48rem;
+    height: 1.48rem;
   }
 }
 
@@ -1457,4 +1690,30 @@ body::before {
   @page {
     margin: 1.5cm;
   }
+}
+
+.review-cards {
+  display: grid;
+  gap: 1rem;
+}
+.review-card {
+  border: 1px solid var(--border, rgba(0, 0, 0, 0.12));
+  border-radius: 0.5rem;
+  padding: 1rem;
+}
+.review-card h3 {
+  margin-top: 0;
+  overflow-wrap: anywhere;
+}
+.review-comment {
+  display: block;
+  width: 100%;
+  min-height: 4rem;
+  margin-top: 0.5rem;
+  box-sizing: border-box;
+  font: inherit;
+  resize: vertical;
+}
+.review-copy {
+  margin-bottom: 1rem;
 }

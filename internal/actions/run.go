@@ -140,9 +140,6 @@ func runReport(opts Options) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	if render.Detect(src) == render.KindBinary {
-		return Result{}, errBinaryInput
-	}
 	ctx := opts.Context
 	if ctx == nil {
 		ctx = context.TODO()

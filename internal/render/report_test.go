@@ -42,8 +42,8 @@ func TestRenderReport_TabInitialFocusState(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `role="tablist"`)
-	assert.Contains(t, got, `id="report-tab-0" type="button" role="tab" aria-selected="true" aria-controls="report-panel-0" tabindex="0">Summary</button>`)
-	assert.Contains(t, got, `id="report-tab-1" type="button" role="tab" aria-selected="false" aria-controls="report-panel-1" tabindex="-1">Records</button>`)
+	assert.Contains(t, got, `id="report-tab-0" type="button" role="tab" aria-selected="true" aria-controls="report-panel-0" tabindex="0" title="Summary"><span>Summary</span></button>`)
+	assert.Contains(t, got, `id="report-tab-1" type="button" role="tab" aria-selected="false" aria-controls="report-panel-1" tabindex="-1" title="Records"><span>Records</span></button>`)
 	assert.Contains(t, got, `<section id="report-panel-0" class="report-tab-panel" role="tabpanel" aria-labelledby="report-tab-0">`)
 	assert.Contains(t, got, `<section id="report-panel-1" class="report-tab-panel" role="tabpanel" aria-labelledby="report-tab-1" hidden>`)
 	assert.Contains(t, got, `<p class="report-filter-status" aria-live="polite">2 rows</p>`)
@@ -98,10 +98,10 @@ func TestRenderReport_SlidesLayout(t *testing.T) {
 	assert.Contains(t, got, `class="report-slide" aria-label="Slide 2 of 2: Records"`)
 	assert.Contains(t, got, `<div class="report-slide-count">1 / 2</div>`)
 	assert.Contains(t, got, `<div class="report-slide-count">2 / 2</div>`)
-	assert.Contains(t, got, `class="report-slide-controls" aria-label="Slide controls"`)
-	assert.Contains(t, got, `data-slide-prev`)
+	assert.Contains(t, got, `<nav class="report-slide-controls" aria-label="Slide controls">`)
+	assert.Contains(t, got, `data-slide-prev aria-label="Previous slide" title="Previous slide"><span aria-hidden="true">‹</span>`)
 	assert.Contains(t, got, `data-slide-status>1 / 2</span>`)
-	assert.Contains(t, got, `data-slide-next`)
+	assert.Contains(t, got, `data-slide-next aria-label="Next slide" title="Next slide"><span aria-hidden="true">›</span>`)
 	assert.Contains(t, got, `.report-slide`)
 	assert.NotContains(t, got, `role="tablist"`)
 }
@@ -118,8 +118,8 @@ func TestRenderReport_MixedSummaryShowsSignalNames(t *testing.T) {
 	assert.Contains(t, got, `<dt>Kind</dt><dd>mixed</dd>`)
 	assert.Contains(t, got, `multiple weak format signals: markdown-like prose, json-like block, log severity`)
 	assert.Contains(t, got, `role="tablist"`)
-	assert.Contains(t, got, `>Summary</button>`)
-	assert.Contains(t, got, `>Input</button>`)
+	assert.Contains(t, got, `title="Summary"><span>Summary</span></button>`)
+	assert.Contains(t, got, `title="Input"><span>Input</span></button>`)
 	assert.Contains(t, got, `<dl class="text-overview" aria-label="Text overview">`)
 	assert.Contains(t, got, `ERROR failed`)
 }
@@ -152,6 +152,27 @@ func TestRenderReport_PlainUsesTextOverview(t *testing.T) {
 	assert.Contains(t, got, `<pre class="report-text"><code class="language-plaintext">ordinary prose`)
 }
 
+func TestRenderReport_BinaryUsesSafePreview(t *testing.T) {
+	t.Parallel()
+
+	src := []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0x00, 0xff, 'h', 't', 'm', 'l'}
+	analysis, plan := report.Plan(t.Context(), src, report.Options{SourceName: "logo.png", Planner: report.PlannerOff})
+
+	got, err := RenderReport(src, Options{FallbackTitle: "logo"}, analysis, plan)
+	require.NoError(t, err)
+
+	assert.Equal(t, report.KindBinary, analysis.Kind)
+	assert.Contains(t, got, `<dd>binary</dd>`)
+	assert.Contains(t, got, `<dl class="binary-overview" aria-label="Binary overview">`)
+	assert.Contains(t, got, `<dt>Bytes</dt><dd>14</dd>`)
+	assert.Contains(t, got, `<dt>Preview</dt><dd>14 bytes</dd>`)
+	assert.Contains(t, got, `<dt>Reason</dt><dd>binary bytes detected</dd>`)
+	assert.Contains(t, got, `<pre class="binary-preview" aria-label="Binary byte preview"><code>`)
+	assert.Contains(t, got, `00000000  89 50 4e 47 0d 0a 1a 0a 00 ff 68 74 6d 6c`)
+	assert.Contains(t, got, `|.PNG......html|`)
+	assert.NotContains(t, got, "\x00")
+}
+
 func TestRenderReport_FilterStatusSingular(t *testing.T) {
 	t.Parallel()
 
@@ -177,6 +198,49 @@ func TestRenderReport_FilterStatusSingular(t *testing.T) {
 	assert.NotContains(t, got, `>1 rows<`)
 }
 
+func TestRenderReport_DataTableIncludesFilterEmptyRow(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("name,score\nAlpha,10\nBeta,20\n")
+	analysis := report.Analyze(src, "scores.csv")
+	plan := report.ReportPlan{
+		Version: report.PlanVersion,
+		Kind:    report.KindCSVRecords,
+		Layout:  report.LayoutSinglePage,
+		Mode:    report.ModeDataBrowser,
+		Components: []report.Component{
+			{Type: report.ComponentDataTable, Source: "records", Title: "Records", Options: map[string]string{}},
+		},
+	}
+
+	got, err := RenderReport(src, Options{FallbackTitle: "scores"}, analysis, plan)
+	require.NoError(t, err)
+
+	assert.Contains(t, got, `<tr class="report-empty-row" data-report-empty-row hidden><td colspan="2">No rows match</td></tr>`)
+}
+
+func TestRenderReport_DataTableShowsEmptyInputRow(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("name,score\n")
+	analysis := report.Analyze(src, "scores.csv")
+	plan := report.ReportPlan{
+		Version: report.PlanVersion,
+		Kind:    report.KindCSVRecords,
+		Layout:  report.LayoutSinglePage,
+		Mode:    report.ModeDataBrowser,
+		Components: []report.Component{
+			{Type: report.ComponentDataTable, Source: "records", Title: "Records", Options: map[string]string{}},
+		},
+	}
+
+	got, err := RenderReport(src, Options{FallbackTitle: "scores"}, analysis, plan)
+	require.NoError(t, err)
+
+	assert.Contains(t, got, `<p class="report-filter-status" aria-live="polite">0 rows</p>`)
+	assert.Contains(t, got, `<tr class="report-empty-row" data-report-empty-row><td colspan="2">No rows</td></tr>`)
+}
+
 func TestRenderReport_TranscriptUsesStructuredTurns(t *testing.T) {
 	t.Parallel()
 
@@ -198,6 +262,7 @@ func TestRenderReport_TranscriptUsesStructuredTurns(t *testing.T) {
 	got, err := RenderReport(src, Options{FallbackTitle: "transcript"}, analysis, plan)
 	require.NoError(t, err)
 
+	assert.Contains(t, got, `<dl class="transcript-overview" aria-label="Transcript overview"><div><dt>Turns</dt><dd>3</dd></div><div><dt>Speakers</dt><dd>2</dd></div></dl>`)
 	assert.Contains(t, got, `<ol class="transcript-turns">`)
 	assert.Contains(t, got, `<li class="transcript-turn"><span class="transcript-speaker">Host</span><div class="transcript-text"><p>Welcome back.</p></div></li>`)
 	assert.Contains(t, got, `<span class="transcript-speaker">Guest</span><div class="transcript-text"><p>Thanks for having me.</p><p>continued answer</p></div>`)
@@ -248,6 +313,7 @@ func TestRenderReport_LogUsesStructuredLines(t *testing.T) {
 	got, err := RenderReport(src, Options{FallbackTitle: "log"}, analysis, plan)
 	require.NoError(t, err)
 
+	assert.Contains(t, got, `<dl class="log-overview" aria-label="Log overview"><div><dt>Lines</dt><dd>2</dd></div><div><dt>Errors</dt><dd>1</dd></div><div><dt>Info</dt><dd>1</dd></div></dl>`)
 	assert.Contains(t, got, `<ol class="log-lines">`)
 	assert.Contains(t, got, `<li class="log-line log-error"><span class="log-level">ERROR</span><span class="log-message">2026-06-16 12:00:00 ERROR fail</span></li>`)
 	assert.Contains(t, got, `<li class="log-line log-info"><span class="log-level">INFO</span><span class="log-message">2026-06-16 12:00:01 INFO ok</span></li>`)
@@ -275,9 +341,31 @@ func TestRenderReport_LogEscapesAndClassifiesGoTestLines(t *testing.T) {
 	got, err := RenderReport(src, Options{FallbackTitle: "go-test"}, analysis, plan)
 	require.NoError(t, err)
 
+	assert.Contains(t, got, `<dl class="log-overview" aria-label="Log overview"><div><dt>Lines</dt><dd>3</dd></div><div><dt>Errors</dt><dd>1</dd></div><div><dt>Info</dt><dd>1</dd></div></dl>`)
 	assert.Contains(t, got, `<li class="log-line log-error"><span class="log-level">ERROR</span><span class="log-message">--- FAIL: TestThing (0.00s)</span></li>`)
 	assert.Contains(t, got, `<span class="log-message">    thing_test.go:10: got &lt;bad&gt;</span>`)
 	assert.Contains(t, got, `<li class="log-line log-info"><span class="log-level">INFO</span><span class="log-message">ok	github.com/example/project	0.123s</span></li>`)
+}
+
+func TestRenderReport_AccessLogClassifiesHTTPStatus(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("127.0.0.1 - - [16/Jun/2026:12:00:00 -0400] \"GET /index.html HTTP/1.1\" 200 1234\n" +
+		"127.0.0.1 - - [16/Jun/2026:12:00:01 -0400] \"GET /missing HTTP/1.1\" 404 123\n" +
+		"127.0.0.1 - - [16/Jun/2026:12:00:02 -0400] \"POST /api HTTP/1.1\" 500 42\n")
+	analysis, plan := report.Plan(t.Context(), src, report.Options{SourceName: "access.log", Planner: report.PlannerOff})
+
+	require.Equal(t, report.KindLog, analysis.Kind)
+	require.Contains(t, analysis.Reasons, "http access log markers")
+
+	got, err := RenderReport(src, Options{FallbackTitle: "access"}, analysis, plan)
+	require.NoError(t, err)
+
+	assert.Contains(t, got, `<dl class="log-overview" aria-label="Log overview"><div><dt>Lines</dt><dd>3</dd></div><div><dt>Errors</dt><dd>1</dd></div><div><dt>Warnings</dt><dd>1</dd></div><div><dt>Info</dt><dd>1</dd></div></dl>`)
+	assert.Contains(t, got, `<li class="log-line log-info"><span class="log-level">INFO</span><span class="log-message">127.0.0.1 - - [16/Jun/2026:12:00:00 -0400] &#34;GET /index.html HTTP/1.1&#34; 200 1234</span></li>`)
+	assert.Contains(t, got, `<li class="log-line log-warn"><span class="log-level">WARN</span><span class="log-message">127.0.0.1 - - [16/Jun/2026:12:00:01 -0400] &#34;GET /missing HTTP/1.1&#34; 404 123</span></li>`)
+	assert.Contains(t, got, `<li class="log-line log-error"><span class="log-level">ERROR</span><span class="log-message">127.0.0.1 - - [16/Jun/2026:12:00:02 -0400] &#34;POST /api HTTP/1.1&#34; 500 42</span></li>`)
+	assert.NotContains(t, got, `<pre class="report-text"`)
 }
 
 func TestRenderReport_ForcedLogModeUsesStructuredLines(t *testing.T) {
@@ -348,6 +436,7 @@ func TestRenderReport_SourceCodeShowsOverview(t *testing.T) {
 	assert.Contains(t, got, `<dl class="code-overview" aria-label="Code overview">`)
 	assert.Contains(t, got, `<dt>Language</dt><dd>Go</dd>`)
 	assert.Contains(t, got, `<dt>Source</dt><dd>main.go</dd>`)
+	assert.Contains(t, got, `<dt>Renderer</dt><dd>Chroma</dd>`)
 	assert.Contains(t, got, `<dt>Lines</dt><dd>3</dd>`)
 	assert.Contains(t, got, `class="chroma light"`)
 }
@@ -368,9 +457,23 @@ func TestRenderReport_ForcedCodeModeShowsOverview(t *testing.T) {
 	assert.Contains(t, got, `<dl class="code-overview" aria-label="Code overview">`)
 	assert.Contains(t, got, `<dt>Language</dt><dd>Plain text</dd>`)
 	assert.Contains(t, got, `<dt>Source</dt><dd>notes.txt</dd>`)
+	assert.Contains(t, got, `<dt>Renderer</dt><dd>Plain text</dd>`)
 	assert.Contains(t, got, `<dt>Lines</dt><dd>2</dd>`)
 	assert.Contains(t, got, `<pre><code class="language-plaintext">plain text`)
 	assert.NotContains(t, got, `<dl class="text-overview"`)
+}
+
+func TestRenderReport_CodeOverviewReportsANSIRenderer(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("\x1b[31mred\x1b[0m\n")
+	analysis, plan := report.Plan(t.Context(), src, report.Options{Mode: report.ModeOverrideCode, Planner: report.PlannerOff})
+
+	got, err := RenderReport(src, Options{FallbackTitle: "ansi", SourceName: "ansi.txt"}, analysis, plan)
+	require.NoError(t, err)
+
+	assert.Contains(t, got, `<dt>Renderer</dt><dd>ANSI</dd>`)
+	assert.Contains(t, got, `class="language-ansi"`)
 }
 
 func TestRenderReport_ArticleForcesMarkdownRendering(t *testing.T) {
@@ -423,6 +526,58 @@ func TestRenderReport_ArticleOverviewCountsSections(t *testing.T) {
 	assert.Contains(t, got, `<dt>Sections</dt><dd>2</dd>`)
 	assert.Contains(t, got, `<h2 id="one">One</h2>`)
 	assert.Contains(t, got, `<h2 id="two">Two</h2>`)
+}
+
+func TestRenderReport_ArticleOverviewCountsImages(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("# Media\n\n![Raster](raster.png)\n\n![Vector](vector.svg)\n")
+	analysis := report.Analyze(src, "media.md")
+	plan := report.ReportPlan{
+		Version: report.PlanVersion,
+		Kind:    analysis.Kind,
+		Layout:  report.LayoutSinglePage,
+		Mode:    report.ModeReader,
+		Components: []report.Component{
+			{Type: report.ComponentArticle, Source: "input", Title: "Article", Options: map[string]string{}},
+		},
+	}
+
+	got, err := RenderReport(src, Options{FallbackTitle: "media"}, analysis, plan)
+	require.NoError(t, err)
+
+	assert.Contains(t, got, `<dt>Images</dt><dd>2</dd>`)
+	assert.Contains(t, got, `<img src="raster.png" alt="Raster">`)
+	assert.Contains(t, got, `<img src="vector.svg" alt="Vector">`)
+}
+
+func TestRenderReport_ArticleOverviewCountsMarkdownPieces(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("# Components\n\n## Table\n\n| Piece | State |\n|---|---|\n| Table | Ready |\n\n## Tasks\n\n- [x] Ship renderer\n- [ ] Capture screenshots\n\n## Quote\n\n> Keep generated pages self-contained.\n\n## Code\n\n```go\nfmt.Println(\"html\")\n```\n")
+	analysis := report.Analyze(src, "components.md")
+	plan := report.ReportPlan{
+		Version: report.PlanVersion,
+		Kind:    analysis.Kind,
+		Layout:  report.LayoutSinglePage,
+		Mode:    report.ModeReader,
+		Components: []report.Component{
+			{Type: report.ComponentArticle, Source: "input", Title: "Article", Options: map[string]string{}},
+		},
+	}
+
+	got, err := RenderReport(src, Options{FallbackTitle: "components"}, analysis, plan)
+	require.NoError(t, err)
+
+	assert.Contains(t, got, `<dt>Tables</dt><dd>1</dd>`)
+	assert.Contains(t, got, `<dt>Code blocks</dt><dd>1</dd>`)
+	assert.Contains(t, got, `<dt>Tasks</dt><dd>2</dd>`)
+	assert.Contains(t, got, `<dt>Quotes</dt><dd>1</dd>`)
+	assert.Contains(t, got, `<nav class="toc" aria-label="Table of contents">`)
+	assert.Contains(t, got, `<table>`)
+	assert.Contains(t, got, `type="checkbox"`)
+	assert.Contains(t, got, `<blockquote>`)
+	assert.Contains(t, got, `<pre`)
 }
 
 func TestRenderReport_ArticleUsesMarkdownHeadingTitle(t *testing.T) {
@@ -500,12 +655,28 @@ func TestRenderReport_PlainUnifiedDiffUsesDiffView(t *testing.T) {
 
 	assert.Contains(t, got, `<dd>diff</dd>`)
 	assert.Contains(t, got, `<h2>Diff</h2>`)
-	assert.Contains(t, got, `<div class="diff-summary" aria-label="Diff summary">`)
+	assert.Contains(t, got, `<div class="diff-summary" aria-label="Diff summary"><span><strong>1</strong> file</span><span><strong>1</strong> hunk</span><span class="diff-added"><strong>+1</strong> addition</span><span class="diff-removed"><strong>-1</strong> deletion</span></div>`)
 	assert.Contains(t, got, `<span class="file">--- old.txt</span>`)
 	assert.Contains(t, got, `<span class="file">+++ new.txt</span>`)
 	assert.Contains(t, got, `<span class="del">-old</span>`)
 	assert.Contains(t, got, `<span class="add">+new</span>`)
 	assert.NotContains(t, got, `<h2>Input</h2>`)
+}
+
+func TestRenderReport_PlainUnifiedDiffCountsMultipleFiles(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("--- a.txt\n+++ a.txt\n@@ -1 +1 @@\n-old\n+new\n--- b.txt\n+++ b.txt\n@@ -1 +1 @@\n-left\n+right\n")
+	analysis, plan := report.Plan(t.Context(), src, report.Options{Planner: report.PlannerOff})
+
+	got, err := RenderReport(src, Options{FallbackTitle: "change"}, analysis, plan)
+	require.NoError(t, err)
+
+	assert.Contains(t, got, `<dd>diff</dd>`)
+	assert.Contains(t, got, `<span><strong>2</strong> files</span>`)
+	assert.Contains(t, got, `<span><strong>2</strong> hunks</span>`)
+	assert.Contains(t, got, `<span class="diff-added"><strong>+2</strong> additions</span>`)
+	assert.Contains(t, got, `<span class="diff-removed"><strong>-2</strong> deletions</span>`)
 }
 
 func TestRenderReport_NoNewlineDiffMarkerUsesMetadataClass(t *testing.T) {
@@ -643,6 +814,7 @@ func TestRenderReport_FileTreeCleansASCIIMarkers(t *testing.T) {
 	assert.Contains(t, got, `<li style="--depth:0"><span>cmd</span></li>`)
 	assert.Contains(t, got, `<li style="--depth:1"><span>html</span></li>`)
 	assert.Contains(t, got, `<li style="--depth:0"><span>internal</span></li>`)
+	assert.Contains(t, got, `<dl class="file-tree-overview" aria-label="File tree overview"><div><dt>Entries</dt><dd>3</dd></div><div><dt>Max depth</dt><dd>1</dd></div></dl>`)
 	assert.Contains(t, got, `<dt>Files</dt><dd>3</dd>`)
 	assert.NotContains(t, got, `<span>.</span>`)
 	assert.NotContains(t, got, `|-- cmd`)
@@ -1075,6 +1247,7 @@ func TestRenderReport_RecordCardsOmitEmptyFields(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `class="record-card"`)
+	assert.Contains(t, got, `<dl class="record-cards-overview" aria-label="Record cards overview"><div><dt>Cards</dt><dd>2</dd></div><div><dt>Visible fields</dt><dd>4</dd></div></dl>`)
 	assert.Contains(t, got, `<h3>Record 1: has-null</h3>`)
 	assert.Contains(t, got, `<h3>Record 2: missing</h3>`)
 	assert.Contains(t, got, cardField("name", "has-null"))
@@ -1171,6 +1344,7 @@ func TestRenderReport_JSONScalarFileRendersRawJSON(t *testing.T) {
 
 	assert.Contains(t, got, `<dd>json-object</dd>`)
 	assert.Contains(t, got, `<h2>JSON</h2>`)
+	assert.Contains(t, got, `<pre class="json-source"><code class="language-json">`)
 	assert.Contains(t, got, `9007199254740993`)
 	assert.NotContains(t, got, `9007199254740992`)
 }
@@ -1191,6 +1365,7 @@ func TestRenderReport_JSONObjectShowsOverview(t *testing.T) {
 	assert.Contains(t, got, `<dt>name</dt><dd>string</dd>`)
 	assert.Contains(t, got, `<dt>score</dt><dd>number</dd>`)
 	assert.Contains(t, got, `<dt>tags</dt><dd>array (2)</dd>`)
+	assert.Contains(t, got, `<pre class="json-source"><code class="language-json">`)
 	assert.Contains(t, got, `&#34;score&#34;: 10`)
 }
 
@@ -1205,6 +1380,7 @@ func TestRenderReport_JSONArrayShowsOverview(t *testing.T) {
 
 	assert.Contains(t, got, `<dd>json-object</dd>`)
 	assert.Contains(t, got, `<div class="json-overview" aria-label="JSON overview"><span><strong>3</strong> items</span><span>array (3)</span></div>`)
+	assert.Contains(t, got, `<pre class="json-source"><code class="language-json">`)
 }
 
 func TestRenderReport_JSONLinesTableUsesAnalyzedRecords(t *testing.T) {
@@ -1519,4 +1695,29 @@ func TestRenderReport_SlidesSplitsMarkdownByH2(t *testing.T) {
 	assert.Contains(t, got, `aria-label="Slide 2 of 3: One"`)
 	assert.Contains(t, got, `aria-label="Slide 3 of 3: Two"`)
 	assert.Contains(t, got, `<div class="report-slide-count">2 / 3</div>`)
+}
+
+func TestRenderReport_ReviewCardsRenderTextareasAndCopy(t *testing.T) {
+	t.Parallel()
+
+	src := []byte(`[{"name":"alpha","note":"first"},{"name":"beta","note":"second"}]`)
+	analysis := report.Analyze(src, "values.json")
+	plan := report.ReportPlan{
+		Version: report.PlanVersion,
+		Kind:    report.KindJSONRecords,
+		Layout:  report.LayoutReview,
+		Mode:    report.ModeReview,
+		Components: []report.Component{
+			{Type: report.ComponentReview, Source: "records", Title: "Review", Options: map[string]string{}},
+		},
+	}
+
+	got, err := RenderReport(src, Options{FallbackTitle: "values"}, analysis, plan)
+	require.NoError(t, err)
+
+	assert.Contains(t, got, `class="review-card"`)
+	assert.Contains(t, got, `class="review-copy"`)
+	assert.Contains(t, got, `<textarea class="review-comment" data-review-id="alpha"`)
+	assert.Contains(t, got, `<textarea class="review-comment" data-review-id="beta"`)
+	assert.Contains(t, got, cardField("note", "first"))
 }

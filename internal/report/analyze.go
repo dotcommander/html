@@ -65,6 +65,9 @@ func Analyze(src []byte, sourceName string) Analysis {
 	if a, ok := analyzeTranscript(text, stats); ok {
 		return a
 	}
+	if a, ok := analyzeAccessLog(text, stats); ok {
+		return a
+	}
 	if a, ok := analyzeLog(text, stats); ok {
 		return a
 	}
@@ -431,10 +434,19 @@ func diffFileCount(text string) int {
 	count := 0
 	inHunk := false
 	sawOldHeader := false
-	for _, line := range strings.Split(text, "\n") {
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		nextLine := ""
+		if i+1 < len(lines) {
+			nextLine = lines[i+1]
+		}
 		switch {
 		case strings.HasPrefix(line, "@@"):
 			inHunk = true
+		case inHunk && strings.HasPrefix(line, "--- ") && strings.HasPrefix(nextLine, "+++ "):
+			count++
+			inHunk = false
+			sawOldHeader = false
 		case !inHunk && strings.HasPrefix(line, "--- "):
 			sawOldHeader = true
 		case !inHunk && sawOldHeader && strings.HasPrefix(line, "+++ "):
@@ -669,12 +681,33 @@ var (
 	reSeverity          = regexp.MustCompile(`(?i)\b(DEBUG|INFO|WARN|WARNING|ERROR|FATAL|PASS|FAIL|panic:)\b`)
 	reGoTest            = regexp.MustCompile(`(?m)^(ok|FAIL|\?)\s+\S+\s+((\d+(\.\d+)?s)|\(cached\)|\[no test files\])\s*$`)
 	reGoTestMark        = regexp.MustCompile(`(?m)^(--- FAIL:|PASS$|FAIL$)`)
+	reAccessLog         = regexp.MustCompile(`^\S+\s+\S+\s+\S+\s+\[[^\]]+\]\s+"[A-Z]+ [^"]*(?: HTTP/\d(?:\.\d)?)?"\s+[1-5]\d\d\s+(?:\d+|-)(?:\s|$)`)
 	reTranscriptSpeaker = regexp.MustCompile(`^(?:Speaker [0-9A-Za-z]+|Host|Guest|Interviewer|Interviewee|Participant [0-9A-Za-z]+|[A-Z][A-Za-z .'-]{1,40}):\s+\S`)
 )
 
 func analyzeGoTestLog(text string, stats Stats) (Analysis, bool) {
 	if reGoTest.MatchString(text) || reGoTestMark.MatchString(text) || strings.Contains(text, "\nFAIL\t") {
 		return Analysis{Kind: KindLog, Confidence: 0.82, Reasons: []string{"log/test/console markers"}, Stats: stats}, true
+	}
+	return Analysis{}, false
+}
+
+func analyzeAccessLog(text string, stats Stats) (Analysis, bool) {
+	lines := nonEmptyLines(text)
+	if len(lines) == 0 {
+		return Analysis{}, false
+	}
+	matches := 0
+	for _, line := range lines {
+		if reAccessLog.MatchString(strings.TrimSpace(line)) {
+			matches++
+		}
+	}
+	if matches == 0 {
+		return Analysis{}, false
+	}
+	if matches == len(lines) || matches >= 2 && float64(matches)/float64(len(lines)) >= 0.6 {
+		return Analysis{Kind: KindLog, Confidence: 0.84, Reasons: []string{"http access log markers"}, Stats: stats}, true
 	}
 	return Analysis{}, false
 }

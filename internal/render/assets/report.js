@@ -132,17 +132,27 @@
     if (!table) return;
     const tbody = table.tBodies[0];
     if (!tbody) return;
+    const emptyRow = tbody.querySelector("[data-report-empty-row]");
+    const dataRows = () => Array.from(tbody.rows).filter((row) => !row.hasAttribute("data-report-empty-row"));
 
     const updateStatus = () => {
+      const rows = dataRows();
+      const visible = rows.filter((row) => !row.hidden).length;
+      if (emptyRow) {
+        emptyRow.hidden = visible !== 0;
+        const cell = emptyRow.cells[0];
+        if (cell) {
+          cell.textContent = rows.length === 0 ? "No rows" : "No rows match";
+        }
+      }
       if (!status) return;
-      const visible = Array.from(tbody.rows).filter((row) => !row.hidden).length;
-      status.textContent = visible === 0 ? "No rows match" : `${visible} ${visible === 1 ? "row" : "rows"}`;
+      status.textContent = rows.length === 0 ? "No rows" : visible === 0 ? "No rows match" : `${visible} ${visible === 1 ? "row" : "rows"}`;
     };
 
     if (input) {
       input.addEventListener("input", () => {
         const needle = input.value.toLowerCase();
-        Array.from(tbody.rows).forEach((row) => {
+        dataRows().forEach((row) => {
           row.hidden = needle && !row.textContent.toLowerCase().includes(needle);
         });
         updateStatus();
@@ -171,7 +181,7 @@
     syncSortLabels();
 
     const sortBy = (index, asc) => {
-      const rows = Array.from(tbody.rows);
+      const rows = dataRows();
       rows.sort((a, b) => {
         const av = a.cells[index]?.textContent || "";
         const bv = b.cells[index]?.textContent || "";
@@ -204,4 +214,62 @@
       });
     }
   });
+})();
+
+(() => {
+  const comments = Array.from(document.querySelectorAll(".review-card .review-comment"));
+  if (comments.length === 0) return;
+
+  const keyFor = (el) => `html-review:${el.dataset.reviewId || ""}`;
+
+  comments.forEach((el) => {
+    try {
+      const saved = localStorage.getItem(keyFor(el));
+      if (saved !== null) el.value = saved;
+    } catch (e) {}
+    el.addEventListener("input", () => {
+      try {
+        localStorage.setItem(keyFor(el), el.value);
+      } catch (e) {}
+    });
+  });
+
+  const copyButton = document.querySelector(".review-copy");
+  if (!copyButton) return;
+
+  const buildExport = () => {
+    const blocks = [];
+    comments.forEach((el) => {
+      const value = el.value.trim();
+      if (!value) return;
+      const id = el.dataset.reviewId || "";
+      blocks.push(`## ${id}\n${value}`);
+    });
+    if (blocks.length === 0) return "";
+    return `# Review comments\n\n${blocks.join("\n\n")}`;
+  };
+
+  copyButton.addEventListener("click", () => {
+    const text = buildExport();
+    if (!text) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+    } else {
+      fallbackCopy(text);
+    }
+  });
+
+  function fallbackCopy(text) {
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.position = "absolute";
+    area.style.left = "-9999px";
+    document.body.appendChild(area);
+    area.select();
+    try {
+      document.execCommand("copy");
+    } catch (e) {}
+    document.body.removeChild(area);
+  }
 })();

@@ -28,7 +28,7 @@ const (
 // Detect classifies src as binary, Markdown, or plain text. Precedence:
 //  1. binary (a NUL byte, or >maxControlRatio non-text bytes in the scan window);
 //  2. Markdown — but ONLY on a high-confidence structural signal (fenced code,
-//     a GFM table, a GFM task list, a setext heading, or an ATX heading
+//     a GFM table, a GFM task list, a multi-line blockquote, a setext heading, or an ATX heading
 //     followed by a blank/EOF);
 //  3. plain text (the default).
 //
@@ -90,14 +90,18 @@ var (
 	// A GFM task-list item. The marker is specific enough to avoid ordinary
 	// bullets, command output, and prose lists.
 	reTaskList = regexp.MustCompile(`(?m)^[ \t]{0,3}[-+*][ \t]+\[[ xX]\][ \t]+`)
+	// Two adjacent blockquote lines are a strong enough block Markdown signal.
+	// A single ">" line is too common in email/log excerpts and comparator text.
+	reBlockquote = regexp.MustCompile(`(?m)^[ \t]{0,3}>[ \t]?[^ \t\r\n].*\r?\n[ \t]{0,3}>[ \t]?[^ \t\r\n]`)
 )
 
 // looksLikeMarkdown reports a high-confidence Markdown structure in the (already
 // known-text) window: a fenced code block, a GFM table, a GFM task list, a
-// setext heading, or an ATX heading separated from following prose.
+// multi-line blockquote, a setext heading, or an ATX heading separated from
+// following prose.
 func looksLikeMarkdown(window []byte) bool {
 	scan := limitLines(window, detectScanLines)
-	return reFence.Match(scan) || hasTable(scan) || reTaskList.Match(scan) || hasSetextEq(scan) || hasATXHeading(scan)
+	return reFence.Match(scan) || hasTable(scan) || reTaskList.Match(scan) || reBlockquote.Match(scan) || hasSetextEq(scan) || hasATXHeading(scan)
 }
 
 // hasTable reports a GFM table: a delimiter row (pipes + dashes) with at least
