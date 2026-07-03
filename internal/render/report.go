@@ -687,7 +687,7 @@ func codeBlock(src []byte, opts Options) string {
 		return renderANSI(src)
 	}
 	if lexer := pickLexer(opts.Lang, opts.SourceName, src); lexer != nil {
-		if html, err := highlightCode(string(src), lexer); err == nil {
+		if html, err := highlightCode(string(src), lexer, opts.CodeTheme); err == nil {
 			return html
 		}
 	}

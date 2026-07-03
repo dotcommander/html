@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
+	"github.com/alecthomas/chroma/v2/styles"
 	"github.com/yuin/goldmark"
 	highlighting "github.com/yuin/goldmark-highlighting/v2"
 	"github.com/yuin/goldmark/ast"
@@ -24,15 +25,19 @@ import (
 // heading IDs are identical in both modes — the lone difference is the
 // WithUnsafe renderer option, expressed as data rather than two near-duplicate
 // constructors.
-func newMarkdown(unsafe bool) goldmark.Markdown {
+func newMarkdown(unsafe bool, codeTheme string) goldmark.Markdown {
+	highlightOpts := []highlighting.Option{
+		// WithClasses emits CSS class names (e.g. .chroma .k) rather than
+		// inline styles, so highlightCSS controls colors and dark mode works.
+		highlighting.WithFormatOptions(chromahtml.WithClasses(true)),
+	}
+	if ValidCodeTheme(codeTheme) {
+		highlightOpts = append(highlightOpts, highlighting.WithStyle(codeTheme))
+	}
 	opts := []goldmark.Option{
 		goldmark.WithExtensions(
 			extension.GFM,
-			highlighting.NewHighlighting(
-				// WithClasses emits CSS class names (e.g. .chroma .k) rather than
-				// inline styles, so highlightCSS controls colors and dark mode works.
-				highlighting.WithFormatOptions(chromahtml.WithClasses(true)),
-			),
+			highlighting.NewHighlighting(highlightOpts...),
 		),
 		goldmark.WithParserOptions(
 			parser.WithAutoHeadingID(),
@@ -48,9 +53,19 @@ func newMarkdown(unsafe bool) goldmark.Markdown {
 // Package-level singletons — immutable after init. mdUnsafe (the default) passes
 // raw HTML through; mdSafe omits it.
 var (
-	mdUnsafe = newMarkdown(true)
-	mdSafe   = newMarkdown(false)
+	mdUnsafe = newMarkdown(true, "")
+	mdSafe   = newMarkdown(false, "")
 )
+
+// ValidCodeTheme reports whether name is a Chroma style that can be used for
+// code highlighting. Empty means "use the built-in github/github-dark default".
+func ValidCodeTheme(name string) bool {
+	if name == "" {
+		return true
+	}
+	_, ok := styles.Registry[strings.ToLower(name)]
+	return ok
+}
 
 // Options controls a single Render call.
 type Options struct {
@@ -84,6 +99,9 @@ type Options struct {
 	// Lang forces a chroma syntax-highlight language for plain mode ("" = auto-
 	// detect; "text"/"none"/"plain" = no highlighting / raw escaped text).
 	Lang string
+	// CodeTheme is a Chroma style name for code blocks. Empty keeps the built-in
+	// github/github-dark default.
+	CodeTheme string
 	// SourceName is the input's file name (with extension) when known, used to
 	// detect the highlight language by filename; "" for stdin (content-detected).
 	SourceName string
@@ -115,6 +133,9 @@ func (o Options) cacheTag() string {
 	}
 	if o.Lang != "" {
 		appendCacheTag(&b, "lang", o.Lang)
+	}
+	if o.CodeTheme != "" {
+		appendCacheTag(&b, "code-theme", o.CodeTheme)
 	}
 	if o.FallbackTitle != "" {
 		appendCacheTag(&b, "title", o.FallbackTitle)
@@ -163,7 +184,10 @@ func Render(src []byte, opts Options) (string, error) {
 		return renderPlain(src, opts), nil
 	}
 	md := mdUnsafe
-	if opts.Safe {
+	switch {
+	case opts.CodeTheme != "":
+		md = newMarkdown(!opts.Safe, opts.CodeTheme)
+	case opts.Safe:
 		md = mdSafe
 	}
 	pc := parser.NewContext()

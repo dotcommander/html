@@ -10,16 +10,20 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
+
+	"github.com/alecthomas/chroma/v2/styles"
 )
 
 // Config holds optional user preferences. A zero value (or absent key) means
 // "use the built-in default".
 type Config struct {
-	OpenCommand    string `json:"open_command"`    // launcher command (e.g. "firefox"); "" = OS default
-	MaxWidth       string `json:"max_width"`       // reader column CSS max-width (e.g. "48rem"); "" = default
-	DefaultTheme   string `json:"default_theme"`   // "light" | "dark" | "auto"; "" = auto (system)
-	DefaultPalette string `json:"default_palette"` // "sepia" | "blue" | "green" | "rose" | "catppuccin"; "" = sepia
-	TOC            *bool  `json:"toc"`             // override automatic TOC; nil = automatic
+	OpenCommand      string `json:"open_command"`       // launcher command (e.g. "firefox"); "" = OS default
+	MaxWidth         string `json:"max_width"`          // reader column CSS max-width (e.g. "48rem"); "" = default
+	DefaultTheme     string `json:"default_theme"`      // "light" | "dark" | "auto"; "" = auto (system)
+	DefaultPalette   string `json:"default_palette"`    // "sepia" | "blue" | "green" | "rose" | "catppuccin"; "" = sepia
+	DefaultCodeTheme string `json:"default_code_theme"` // chroma style name for code blocks; "" = github/github-dark
+	TOC              *bool  `json:"toc"`                // override automatic TOC; nil = automatic
 }
 
 // maxConfigBytes caps the config read; a config file is tiny, so anything past
@@ -93,6 +97,11 @@ func (c Config) validate() error {
 	case "", "sepia", "blue", "green", "rose", "catppuccin":
 	default:
 		return fmt.Errorf("default_palette must be \"sepia\", \"blue\", \"green\", \"rose\", or \"catppuccin\" (got %q)", c.DefaultPalette)
+	}
+	if c.DefaultCodeTheme != "" {
+		if _, ok := styles.Registry[strings.ToLower(c.DefaultCodeTheme)]; !ok {
+			return fmt.Errorf("default_code_theme must be a known chroma style (got %q)", c.DefaultCodeTheme)
+		}
 	}
 	if c.MaxWidth != "" && !maxWidthRe.MatchString(c.MaxWidth) {
 		return fmt.Errorf("max_width must be a CSS length like \"48rem\" (got %q)", c.MaxWidth)

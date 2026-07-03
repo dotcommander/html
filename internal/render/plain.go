@@ -37,7 +37,7 @@ func renderPlain(src []byte, opts Options) string {
 		body = renderANSI(src)
 	default:
 		if lexer := pickLexer(opts.Lang, opts.SourceName, src); lexer != nil {
-			if hl, err := highlightCode(string(src), lexer); err == nil {
+			if hl, err := highlightCode(string(src), lexer, opts.CodeTheme); err == nil {
 				body = hl
 			}
 		}
@@ -81,19 +81,23 @@ func pickLexer(lang, sourceName string, src []byte) chroma.Lexer {
 }
 
 // highlightCode renders source with the given chroma lexer using the same class-
-// based formatter and GitHub style as the Markdown code path, so the existing
+// based formatter and code theme as the Markdown code path, so the existing
 // highlightCSS styles it identically. chroma emits `<pre class="chroma light">`,
 // which highlightCSS targets for both light (.chroma) and dark (.chroma.light,
 // scoped under data-theme=dark) themes — no post-processing needed.
-func highlightCode(source string, lexer chroma.Lexer) (string, error) {
+func highlightCode(source string, lexer chroma.Lexer, codeTheme string) (string, error) {
 	lexer = chroma.Coalesce(lexer)
 	iterator, err := lexer.Tokenise(nil, source)
 	if err != nil {
 		return "", err
 	}
 	formatter := chromahtml.New(chromahtml.WithClasses(true))
+	style := styles.Get("github")
+	if ValidCodeTheme(codeTheme) && codeTheme != "" {
+		style = styles.Get(codeTheme)
+	}
 	var buf strings.Builder
-	if err := formatter.Format(&buf, styles.Get("github"), iterator); err != nil {
+	if err := formatter.Format(&buf, style, iterator); err != nil {
 		return "", err
 	}
 	return buf.String() + "\n", nil

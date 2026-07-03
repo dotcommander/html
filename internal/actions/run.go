@@ -30,23 +30,24 @@ var errBinaryInput = errors.New("input looks binary (NUL or non-text bytes); ref
 // Options controls a single render-and-open invocation. Exactly one input source
 // is used: Stdin when non-nil (piped data), otherwise File (a path on disk).
 type Options struct {
-	Context  context.Context
-	File     string    // path to the source file (empty when reading Stdin)
-	Stdin    io.Reader // piped source; non-nil selects stdin mode (injectable for tests)
-	NoOpen   bool      // render only; do not launch the browser
-	Force    bool      // rebuild even if the cache is fresh
-	Safe     bool      // disable raw HTML passthrough (safe for untrusted Markdown)
-	Plain    bool      // force preformatted plain-text rendering
-	Markdown bool      // force Markdown rendering (overrides auto-detection)
-	Frame    bool      // --frame: wrap plain/ANSI output in terminal-window chrome (implies Plain)
-	Title    string    // page title for stdin input (file input uses the basename)
-	Lang     string    // force a syntax-highlight language for plain mode ("" = auto; "text" = raw)
-	OpenCmd  string    // launcher command (config open_command); "" = OS default
-	MaxWidth string    // reader column CSS max-width (config max_width); "" = default
-	Theme    string    // initial theme (config default_theme): "light"|"dark"|"auto"|""
-	Palette  string    // initial palette (config default_palette): sepia|blue|green|rose|catppuccin|""
-	TOC      *bool     // TOC override (config toc): nil = automatic
-	Output   string    // -o: write rendered HTML to this path ("-" = stdout) instead of caching+opening; "" = default
+	Context   context.Context
+	File      string    // path to the source file (empty when reading Stdin)
+	Stdin     io.Reader // piped source; non-nil selects stdin mode (injectable for tests)
+	NoOpen    bool      // render only; do not launch the browser
+	Force     bool      // rebuild even if the cache is fresh
+	Safe      bool      // disable raw HTML passthrough (safe for untrusted Markdown)
+	Plain     bool      // force preformatted plain-text rendering
+	Markdown  bool      // force Markdown rendering (overrides auto-detection)
+	Frame     bool      // --frame: wrap plain/ANSI output in terminal-window chrome (implies Plain)
+	Title     string    // page title for stdin input (file input uses the basename)
+	Lang      string    // force a syntax-highlight language for plain mode ("" = auto; "text" = raw)
+	CodeTheme string    // chroma style for code blocks; "" = github/github-dark default
+	OpenCmd   string    // launcher command (config open_command); "" = OS default
+	MaxWidth  string    // reader column CSS max-width (config max_width); "" = default
+	Theme     string    // initial theme (config default_theme): "light"|"dark"|"auto"|""
+	Palette   string    // initial palette (config default_palette): sepia|blue|green|rose|catppuccin|""
+	TOC       *bool     // TOC override (config toc): nil = automatic
+	Output    string    // -o: write rendered HTML to this path ("-" = stdout) instead of caching+opening; "" = default
 
 	Report     bool
 	Plan       bool
@@ -76,6 +77,9 @@ func Run(opts Options) (path string, err error) {
 func RunWithResult(opts Options) (Result, error) {
 	if opts.Frame {
 		opts.Plain = true // --frame renders the body as plain text inside terminal chrome
+	}
+	if opts.CodeTheme != "" && !render.ValidCodeTheme(opts.CodeTheme) {
+		return Result{}, fmt.Errorf("code theme: unknown chroma style %q", opts.CodeTheme)
 	}
 	if opts.Report || opts.Plan {
 		return runReport(opts)
@@ -397,6 +401,7 @@ func buildRenderOpts(opts Options, fallbackTitle, sourceName string, plain bool)
 		SourceName:    sourceName,
 		SourceDir:     sourceDir,
 		Lang:          opts.Lang,
+		CodeTheme:     opts.CodeTheme,
 		Safe:          opts.Safe,
 		MaxWidth:      opts.MaxWidth,
 		Theme:         opts.Theme,

@@ -9,12 +9,34 @@ import (
 	"github.com/alecthomas/chroma/v2/styles"
 )
 
-// highlightCSSOnce caches the generated chroma CSS — immutable after first call.
-var highlightCSSOnce = sync.OnceValue(func() string {
+var highlightCSSCache sync.Map
+
+// highlightCSS caches generated chroma CSS by style name. Empty preserves the
+// original github light / github-dark pair; a custom style is used in both
+// light and dark page themes so code blocks keep the requested identity.
+func highlightCSS(codeTheme string) string {
+	key := codeTheme
+	if key == "" {
+		key = "github/github-dark"
+	}
+	if css, ok := highlightCSSCache.Load(key); ok {
+		return css.(string)
+	}
+	css := buildHighlightCSS(codeTheme)
+	actual, _ := highlightCSSCache.LoadOrStore(key, css)
+	return actual.(string)
+}
+
+func buildHighlightCSS(codeTheme string) string {
 	formatter := chromahtml.New(chromahtml.WithClasses(true))
 
 	lightStyle := styles.Get("github")
 	darkStyle := styles.Get("github-dark")
+	if ValidCodeTheme(codeTheme) && codeTheme != "" {
+		style := styles.Get(codeTheme)
+		lightStyle = style
+		darkStyle = style
+	}
 
 	var light strings.Builder
 	if err := formatter.WriteCSS(&light, lightStyle); err != nil {
@@ -31,7 +53,7 @@ var highlightCSSOnce = sync.OnceValue(func() string {
 	darkCSS := scopeDarkHighlightCSS(strings.ReplaceAll(dark.String(), ".dark", ".light"))
 
 	return light.String() + darkCSS
-})
+}
 
 func scopeDarkHighlightCSS(css string) string {
 	var b strings.Builder
@@ -53,10 +75,6 @@ func scopeDarkHighlightCSS(css string) string {
 	b.WriteString(`:root[data-theme="dark"] .chroma.light :is(.na, .nb, .bp, .nx, .p, .ge) { color: inherit; }` + "\n")
 	return b.String()
 }
-
-// highlightCSS returns chroma CSS for light (default, unscoped) and dark
-// (scoped under :root[data-theme="dark"], set by theme.js) themes.
-func highlightCSS() string { return highlightCSSOnce() }
 
 // wrapPage wraps rendered body HTML in a full HTML5 document.
 // title must already be HTML-escaped by the caller. opts supplies optional
@@ -126,7 +144,7 @@ func wrapPage(title, body string, opts Options) string {
   </script>
 </body>
 </html>
-`, themeDefault+paletteDefault, themeJS(), title, baseCSS(), highlightCSS(), widthOverride, frameStyle, content, copyJS(), headingsJS(), reportJS())
+`, themeDefault+paletteDefault, themeJS(), title, baseCSS(), highlightCSS(opts.CodeTheme), widthOverride, frameStyle, content, copyJS(), headingsJS(), reportJS())
 	return w.String()
 }
 

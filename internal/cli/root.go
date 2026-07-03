@@ -16,7 +16,7 @@ func Execute() error { return newRootCmd().Execute() }
 func newRootCmd() *cobra.Command {
 	var noOpen, force, safe, plain, markdown, frame bool
 	var plan, stdout bool
-	var title, lang, output string
+	var title, lang, codeTheme, output string
 	reportDefaults := report.DefaultOptions()
 	mode := reportDefaults.Mode
 	layout := reportDefaults.Layout
@@ -71,6 +71,9 @@ func newRootCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if !cmd.Flags().Changed("code-theme") {
+				codeTheme = cfg.DefaultCodeTheme
+			}
 			opts := actions.Options{
 				Context:    cmd.Context(),
 				NoOpen:     noOpen,
@@ -81,6 +84,7 @@ func newRootCmd() *cobra.Command {
 				Frame:      frame,
 				Title:      title,
 				Lang:       lang,
+				CodeTheme:  codeTheme,
 				OpenCmd:    cfg.OpenCommand,
 				MaxWidth:   cfg.MaxWidth,
 				Theme:      cfg.DefaultTheme,
@@ -123,6 +127,7 @@ func newRootCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&frame, "frame", false, "wrap plain/ANSI output in a terminal-window frame (implies --plain)")
 	cmd.Flags().StringVarP(&title, "title", "t", "stdin", "page title for piped input")
 	cmd.Flags().StringVarP(&lang, "lang", "l", "", "syntax-highlight language for plain mode (e.g. go, json; \"text\" = no highlighting)")
+	cmd.Flags().StringVar(&codeTheme, "code-theme", "", "chroma style for code blocks (e.g. dracula, monokai, nord; empty = github/github-dark)")
 	cmd.Flags().StringVarP(&output, "output", "o", "", "write the final HTML document to a stable path (\"-\" writes stdout)")
 	cmd.Flags().BoolVar(&plan, "plan", false, "print the report plan JSON without rendering")
 	cmd.Flags().BoolVar(&stdout, "stdout", false, "write the final HTML document to stdout without opening")

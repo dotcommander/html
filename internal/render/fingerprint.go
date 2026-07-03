@@ -12,7 +12,7 @@ import (
 // embedded asset bytes do not capture (goldmark options, wrapPage markup, report
 // component semantics, chroma theme selection). Bumping it invalidates every
 // cached page.
-const renderSchemaVersion = "57"
+const renderSchemaVersion = "58"
 
 // fingerprintOnce memoizes the renderer fingerprint — immutable per process.
 var fingerprintOnce = sync.OnceValue(func() string {
@@ -46,7 +46,7 @@ var fingerprintOnce = sync.OnceValue(func() string {
 	}
 
 	// Include generated highlight CSS so a chroma theme/version change invalidates.
-	h.Write([]byte(highlightCSS()))
+	h.Write([]byte(highlightCSS("")))
 
 	return hex.EncodeToString(h.Sum(nil))
 })
