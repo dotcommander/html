@@ -47,6 +47,17 @@ func TestRenderPlain_Highlight(t *testing.T) {
 	}
 }
 
+func TestRenderPlain_CodeTheme(t *testing.T) {
+	t.Parallel()
+	src := "package main\n\nfunc main() {}\n"
+	out, err := Render([]byte(src), Options{FallbackTitle: "x", Plain: true, Lang: "go", CodeTheme: "dracula"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	assert.Contains(t, out, `class="chroma`)
+	assert.Contains(t, out, "#282a36")
+}
+
 func TestRenderPlain_LangTextForcesRaw(t *testing.T) {
 	t.Parallel()
 	src := "package main\nfunc main() {}\n"

@@ -64,6 +64,39 @@ func TestRun_OutputIncludesConfiguredPalette(t *testing.T) {
 	assert.Contains(t, html, `class="palette-switcher"`)
 }
 
+func TestRun_OutputIncludesConfiguredCodeTheme(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	out := filepath.Join(dir, "out.html")
+	res, err := RunWithResult(Options{
+		Stdin:     strings.NewReader("```go\npackage main\n```\n"),
+		Output:    out,
+		Markdown:  true,
+		CodeTheme: "dracula",
+		NoOpen:    true,
+	})
+	require.NoError(t, err)
+	require.Equal(t, out, res.Path)
+
+	html := readRenderedFile(t, out)
+	assert.Contains(t, html, `class="chroma`)
+	assert.Contains(t, html, "#282a36")
+}
+
+func TestRun_RejectsUnknownCodeTheme(t *testing.T) {
+	t.Parallel()
+
+	_, err := RunWithResult(Options{
+		Stdin:     strings.NewReader("package main\n"),
+		Plain:     true,
+		CodeTheme: "not-a-style",
+		NoOpen:    true,
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `unknown chroma style "not-a-style"`)
+}
+
 func TestRun_ModeLogForcesStructuredLogView(t *testing.T) {
 	t.Parallel()
 

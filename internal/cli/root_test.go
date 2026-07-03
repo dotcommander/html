@@ -332,6 +332,42 @@ func TestRoot_OutputToStdout(t *testing.T) {
 	}
 }
 
+func TestRoot_CodeThemeOutputToStdout(t *testing.T) {
+	t.Parallel()
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"--markdown", "--code-theme", "dracula", "--stdout"})
+	cmd.SetIn(strings.NewReader("```go\npackage main\n```\n"))
+	out := &bytes.Buffer{}
+	cmd.SetOut(out)
+	cmd.SetErr(&bytes.Buffer{})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	got := out.String()
+	if !strings.Contains(got, `class="chroma`) {
+		t.Fatalf("expected highlighted code block, got:\n%s", got)
+	}
+	if !strings.Contains(got, "#282a36") {
+		t.Fatalf("expected dracula CSS in output, got:\n%s", got)
+	}
+}
+
+func TestRoot_CodeThemeRejectsUnknownStyle(t *testing.T) {
+	t.Parallel()
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"--plain", "--code-theme", "not-a-style", "--stdout"})
+	cmd.SetIn(strings.NewReader("package main\n"))
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("expected unknown code theme error")
+	}
+	if !strings.Contains(err.Error(), `unknown chroma style "not-a-style"`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestRoot_FrameMarkdownMutuallyExclusive(t *testing.T) {
 	t.Parallel()
 	cmd := newRootCmd()

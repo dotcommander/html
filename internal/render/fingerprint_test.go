@@ -9,7 +9,7 @@ import (
 func TestRenderSchemaVersion(t *testing.T) {
 	t.Parallel()
 
-	assert.Equal(t, "57", renderSchemaVersion)
+	assert.Equal(t, "58", renderSchemaVersion)
 }
 
 func TestFingerprintIncludesTitleAndSourceName(t *testing.T) {
@@ -36,5 +36,14 @@ func TestFingerprintIncludesPalette(t *testing.T) {
 	assert.NotEqual(t,
 		Fingerprint(Options{FallbackTitle: "a", Palette: "blue"}),
 		Fingerprint(Options{FallbackTitle: "a", Palette: "rose"}),
+	)
+}
+
+func TestFingerprintIncludesCodeTheme(t *testing.T) {
+	t.Parallel()
+
+	assert.NotEqual(t,
+		Fingerprint(Options{FallbackTitle: "a", CodeTheme: "dracula"}),
+		Fingerprint(Options{FallbackTitle: "a", CodeTheme: "monokai"}),
 	)
 }
