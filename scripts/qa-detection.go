@@ -71,6 +71,7 @@ func detectCases() []detectCase {
 		{Name: "YAML Separator", Category: "Plain", Input: []byte("---\nname: html\nitems: [render, verify]\n"), Want: render.KindPlain, Reason: "YAML document separators are not Markdown dividers."},
 		{Name: "TOML Array", Category: "Plain", Input: []byte("name = \"html\"\nitems = [\"render\", \"verify\"]\n"), Want: render.KindPlain, Reason: "Config arrays are not Markdown links or lists."},
 		{Name: "CSV", Category: "Plain", Input: []byte("a,b,c\n1,2,3\n4,5,6\n"), Want: render.KindPlain, Reason: "CSV renders as plain unless report mode is requested."},
+		{Name: "Aligned Columns", Category: "Plain", Input: []byte("NAME      PID   CPU\napi       123   4.5\nworker    456   0.1\n"), Want: render.KindPlain, Reason: "Columnar command output is plain document input; rendering may upgrade it to an HTML table."},
 		{Name: "Pipe Prose Without Delimiter", Category: "Plain", Input: []byte("name | status\nalpha | ready\nbeta | review\n"), Want: render.KindPlain, Reason: "Pipe-separated text without a delimiter row is not a Markdown table."},
 		{Name: "Go Source", Category: "Plain", Input: []byte("package main\n\nimport \"fmt\"\n\nfunc main() { fmt.Println(\"hi\") }\n"), Want: render.KindPlain, Reason: "Source code stays plain in ordinary document mode."},
 		{Name: "Python Dunder Comment", Category: "Plain", Input: []byte("# module\nclass A:\n    def __init__(self):\n        pass\n"), Want: render.KindPlain, Reason: "Hash comments must not become headings."},

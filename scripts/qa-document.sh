@@ -128,6 +128,41 @@ line two with <tag> & "quotes"
 third line of plain prose
 EOF_PLAIN
 
+cat >"${src_dir}/records.csv" <<'EOF_CSV'
+name,status,count
+alpha,ready,2
+beta,queued,5
+EOF_CSV
+
+cat >"${src_dir}/columns.txt" <<'EOF_COLUMNS'
+NAME      PID   CPU
+api       123   4.5
+worker    456   0.1
+EOF_COLUMNS
+
+cat >"${src_dir}/skill-leaderboards.txt" <<'EOF_SKILLS'
+codex skill leaderboard
+files: 1446  events: 8745
+cache: 1404 hit  42 scanned
+rank skill                                  uses  loads matches sessions
+1    next                                   1447   1447       0       50
+2    go-dev-patterns                        1128   1128       0      467
+
+claude skill leaderboard
+files: 11349  events: 302
+cache: 10961 hit  388 scanned
+rank skill                                  uses  loads matches sessions
+1    repo-audit-deep                          29     29       0       29
+2    audit                                    20     20       0       19
+
+pi skill leaderboard
+files: 3237  events: 6913
+cache: 3237 hit  0 scanned
+rank skill                                  uses  loads matches sessions
+1    pi-create-pi-skill                      435      8     427      256
+2    pi-create-pi-extension                  418     38     380      249
+EOF_SKILLS
+
 cat >"${src_dir}/weak-inline.txt" <<'EOF_WEAK'
 This input has only inline Markdown cues: **bold**, `code`, and [docs](https://example.test/docs).
 EOF_WEAK
@@ -180,9 +215,34 @@ require_file_contains plain "${out_dir}/plain.html" '# not a heading'
 require_file_contains plain "${out_dir}/plain.html" '&lt;tag&gt; &amp; &#34;quotes&#34;'
 require_file_not_contains plain "${out_dir}/plain.html" '<h1 id='
 
+run_doc plain-csv-table "${src_dir}/records.csv" "${out_dir}/plain-csv-table.html"
+require_file_contains plain-csv-table "${out_dir}/plain-csv-table.html" '<table class="plain-data-table">'
+require_file_contains plain-csv-table "${out_dir}/plain-csv-table.html" '<th scope="col">status</th>'
+require_file_contains plain-csv-table "${out_dir}/plain-csv-table.html" '<td>queued</td>'
+require_file_not_contains plain-csv-table "${out_dir}/plain-csv-table.html" 'language-plaintext'
+
+run_doc plain-column-table "${src_dir}/columns.txt" "${out_dir}/plain-column-table.html" --plain
+require_file_contains plain-column-table "${out_dir}/plain-column-table.html" '<table class="plain-data-table">'
+require_file_contains plain-column-table "${out_dir}/plain-column-table.html" '<th scope="col">PID</th>'
+require_file_contains plain-column-table "${out_dir}/plain-column-table.html" '<td>worker</td>'
+
+run_doc plain-skill-leaderboards "${src_dir}/skill-leaderboards.txt" "${out_dir}/plain-skill-leaderboards.html" --plain
+require_file_contains plain-skill-leaderboards "${out_dir}/plain-skill-leaderboards.html" '<section class="plain-table-section">'
+require_file_contains plain-skill-leaderboards "${out_dir}/plain-skill-leaderboards.html" '<h2>codex skill leaderboard</h2>'
+require_file_contains plain-skill-leaderboards "${out_dir}/plain-skill-leaderboards.html" '<pre class="plain-table-meta"><code class="language-plaintext">files: 1446  events: 8745'
+require_file_contains plain-skill-leaderboards "${out_dir}/plain-skill-leaderboards.html" '<table class="plain-data-table">'
+require_file_contains plain-skill-leaderboards "${out_dir}/plain-skill-leaderboards.html" '<td>go-dev-patterns</td>'
+require_file_contains plain-skill-leaderboards "${out_dir}/plain-skill-leaderboards.html" '<h2>pi skill leaderboard</h2>'
+require_file_not_contains plain-skill-leaderboards "${out_dir}/plain-skill-leaderboards.html" 'class="chroma'
+
 run_doc code "${src_dir}/sample.go" "${out_dir}/code.html"
 require_file_contains code "${out_dir}/code.html" 'class="chroma light"'
 require_file_contains code "${out_dir}/code.html" 'document mode'
+
+printf 'name,status\nalpha,ready\nbeta,queued\n' | write_stdout_doc stdout-plain-table "${out_dir}/stdout-plain-table.html" --title "CSV Stdin"
+require_file_contains stdout-plain-table "${out_dir}/stdout-plain-table.html" '<table class="plain-data-table">'
+require_file_contains stdout-plain-table "${out_dir}/stdout-plain-table.html" '<title>CSV Stdin</title>'
+require_file_contains stdout-plain-table "${out_dir}/stdout-plain-table.html" '<td>queued</td>'
 
 printf 'package main\n\nfunc main() { println("stdin go") }\n' | write_stdout_doc stdout-plain-go "${out_dir}/stdout-plain-go.html" --plain --lang go --title "Go Stdin"
 require_file_contains stdout-plain-go "${out_dir}/stdout-plain-go.html" '<title>Go Stdin</title>'
@@ -274,14 +334,18 @@ cat >"${work_dir}/index.html" <<'EOF_INDEX'
     <div class="grid">
 EOF_INDEX
 
-for file in markdown output-dash forced-markdown safe plain code stdout-plain-go ansi frame stdin-markdown; do
+for file in markdown output-dash forced-markdown safe plain plain-csv-table plain-column-table plain-skill-leaderboards code stdout-plain-table stdout-plain-go ansi frame stdin-markdown; do
   case "$file" in
     markdown) note="Markdown document with table, tasks, quote, code, PNG, and SVG inlined as data URIs." ;;
     output-dash) note="The public -o - path writes the final document HTML to stdout without leaking a cache path." ;;
     forced-markdown) note="Forced Markdown renders weak inline cues that auto-detection intentionally leaves plain." ;;
     safe) note="Safe mode removes raw script HTML while preserving ordinary Markdown formatting." ;;
     plain) note="Forced plain text preserves literal headings and escapes HTML-like source text." ;;
+    plain-csv-table) note="CSV file input in ordinary document mode renders as a compact HTML table instead of a raw pre block." ;;
+    plain-column-table) note="Aligned columnar text forced through plain mode renders as a compact HTML table." ;;
+    plain-skill-leaderboards) note="Grai-style multi-section aligned leaderboards render as titled table sections with compact metadata." ;;
     code) note="Source file output uses Chroma highlighting from the .go extension." ;;
+    stdout-plain-table) note="Piped CSV stdin auto-detects as plain input, then renders columnar data as a table with the supplied title." ;;
     stdout-plain-go) note="Plain stdin with an explicit Go language uses Chroma highlighting and the supplied title." ;;
     ansi) note="Piped ANSI stdin keeps terminal color spans in a self-contained HTML document." ;;
     frame) note="Plain log output renders inside the terminal-frame component." ;;

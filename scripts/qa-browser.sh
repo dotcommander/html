@@ -224,7 +224,11 @@ document_direct_capture_slugs=(
   forced-markdown
   safe
   plain
+  plain-csv-table
+  plain-column-table
+  plain-skill-leaderboards
   code
+  stdout-plain-table
   stdout-plain-go
   ansi
   frame
@@ -372,7 +376,11 @@ document_output_dash_url="file://${repo_dir}/.work/html-qa/document-smoke/out/ou
 document_forced_markdown_url="file://${repo_dir}/.work/html-qa/document-smoke/out/forced-markdown.html"
 document_safe_url="file://${repo_dir}/.work/html-qa/document-smoke/out/safe.html"
 document_plain_url="file://${repo_dir}/.work/html-qa/document-smoke/out/plain.html"
+document_plain_csv_table_url="file://${repo_dir}/.work/html-qa/document-smoke/out/plain-csv-table.html"
+document_plain_column_table_url="file://${repo_dir}/.work/html-qa/document-smoke/out/plain-column-table.html"
+document_plain_skill_leaderboards_url="file://${repo_dir}/.work/html-qa/document-smoke/out/plain-skill-leaderboards.html"
 document_code_url="file://${repo_dir}/.work/html-qa/document-smoke/out/code.html"
+document_stdout_plain_table_url="file://${repo_dir}/.work/html-qa/document-smoke/out/stdout-plain-table.html"
 document_stdout_go_url="file://${repo_dir}/.work/html-qa/document-smoke/out/stdout-plain-go.html"
 document_frame_url="file://${repo_dir}/.work/html-qa/document-smoke/out/frame.html"
 document_ansi_url="file://${repo_dir}/.work/html-qa/document-smoke/out/ansi.html"
@@ -430,9 +438,9 @@ capture cli-stdout-table "$stdout_table_url" 390 900
 require_json_file cli-stdout-table "${out_dir}/cli-stdout-table-390x900.json" '.title == "records" and .theme_controls_one_row == true and .component_counts.report_table == 1 and .filter_status == "2 rows" and .report_data_rows == 2 and .visible_report_rows == 2'
 
 capture document "$document_url" 1440 900
-require_json_file document "${out_dir}/document-1440x900.json" '.iframe_count == 10 and .iframe_loaded_frames == 10 and .error_contracts == 8'
+require_json_file document "${out_dir}/document-1440x900.json" '.iframe_count == 14 and .iframe_loaded_frames == 14 and .error_contracts == 8'
 capture document "$document_url" 390 900
-require_json_file document "${out_dir}/document-390x900.json" '.iframe_count == 10 and .iframe_loaded_frames == 10 and .error_contracts == 8'
+require_json_file document "${out_dir}/document-390x900.json" '.iframe_count == 14 and .iframe_loaded_frames == 14 and .error_contracts == 8'
 
 capture document-markdown "$document_markdown_url" 390 900 --palette green
 require_json_file document-markdown "${out_dir}/document-markdown-390x900.json" '.theme_controls_one_row == true and .palette == "green" and .accent == "#2d7a46" and .copy_buttons >= 1 and .heading_anchors >= 1 and .task_checkboxes == 2 and .blockquotes == 1 and .image_count == 2 and .loaded_images == 2 and .data_uri_images == 2 and .svg_images == 1 and .raster_images == 1'
@@ -449,8 +457,20 @@ require_json_file document-safe "${out_dir}/document-safe-390x900.json" '.theme_
 capture document-plain "$document_plain_url" 390 900
 require_json_file document-plain "${out_dir}/document-plain-390x900.json" '.theme_controls_one_row == true and .title == "plain" and .plaintext_blocks == 1 and (.heading_anchors // 0) == 0 and .copy_buttons >= 1'
 
+capture document-plain-csv-table "$document_plain_csv_table_url" 390 900
+require_json_file document-plain-csv-table "${out_dir}/document-plain-csv-table-390x900.json" '.theme_controls_one_row == true and .title == "records" and .component_counts.plain_data_table == 1 and .component_counts.markdown_table == 1 and (.plaintext_blocks // 0) == 0 and (.copy_buttons // 0) == 0'
+
+capture document-plain-column-table "$document_plain_column_table_url" 390 900
+require_json_file document-plain-column-table "${out_dir}/document-plain-column-table-390x900.json" '.theme_controls_one_row == true and .title == "columns" and .component_counts.plain_data_table == 1 and .component_counts.markdown_table == 1 and (.plaintext_blocks // 0) == 0'
+
+capture document-plain-skill-leaderboards "$document_plain_skill_leaderboards_url" 390 900
+require_json_file document-plain-skill-leaderboards "${out_dir}/document-plain-skill-leaderboards-390x900.json" '.theme_controls_one_row == true and .title == "skill-leaderboards" and .component_counts.plain_table_section == 3 and .component_counts.plain_table_meta == 3 and .component_counts.plain_data_table == 3 and .component_counts.markdown_table == 3 and (.component_counts.chroma // 0) == 0 and .scroll_width <= .client_width'
+
 capture document-code "$document_code_url" 390 900
 require_json_file document-code "${out_dir}/document-code-390x900.json" '.theme_controls_one_row == true and .title == "sample" and .component_counts.chroma == 1 and .chroma_line_items == 14 and .copy_buttons >= 1'
+
+capture document-stdout-plain-table "$document_stdout_plain_table_url" 390 900
+require_json_file document-stdout-plain-table "${out_dir}/document-stdout-plain-table-390x900.json" '.theme_controls_one_row == true and .title == "CSV Stdin" and .component_counts.plain_data_table == 1 and .component_counts.markdown_table == 1 and (.plaintext_blocks // 0) == 0'
 
 capture document-stdout-go "$document_stdout_go_url" 390 900
 require_json_file document-stdout-go "${out_dir}/document-stdout-go-390x900.json" '.theme_controls_one_row == true and .title == "Go Stdin" and .component_counts.chroma == 1 and .copy_buttons >= 1'

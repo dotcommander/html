@@ -36,9 +36,18 @@ func renderPlain(src []byte, opts Options) string {
 	case reANSI.Match(src):
 		body = renderANSI(src)
 	default:
-		if lexer := pickLexer(opts.Lang, opts.SourceName, src); lexer != nil {
-			if hl, err := highlightCode(string(src), lexer, opts.CodeTheme); err == nil {
-				body = hl
+		if opts.Lang == "" {
+			if tableBody, ok := renderPlainTableDocument(src, opts.SourceName); ok {
+				body = tableBody
+			} else if table, ok := detectPlainTable(src, opts.SourceName); ok {
+				body = renderPlainTable(table)
+			}
+		}
+		if body == "" {
+			if lexer := pickLexer(opts.Lang, opts.SourceName, src); lexer != nil {
+				if hl, err := highlightCode(string(src), lexer, opts.CodeTheme); err == nil {
+					body = hl
+				}
 			}
 		}
 	}
@@ -69,6 +78,9 @@ func pickLexer(lang, sourceName string, src []byte) chroma.Lexer {
 			if len(sample) > lexerAnalyseCap {
 				sample = sample[:lexerAnalyseCap]
 			}
+			if looksLikeHumanText(sample) {
+				return nil
+			}
 			lx = lexers.Analyse(string(sample))
 		}
 	default:
@@ -78,6 +90,49 @@ func pickLexer(lang, sourceName string, src []byte) chroma.Lexer {
 		return nil
 	}
 	return lx
+}
+
+func looksLikeHumanText(src []byte) bool {
+	text := strings.TrimSpace(string(src))
+	if text == "" || hasStrongCodeSignal(text) {
+		return false
+	}
+	lines := strings.Split(text, "\n")
+	proseLines := 0
+	for _, line := range lines {
+		if looksLikeProseLine(strings.TrimSpace(line)) {
+			proseLines++
+		}
+	}
+	if proseLines >= 2 {
+		return true
+	}
+	return proseLines == 1 && len(strings.Fields(text)) >= 8
+}
+
+func hasStrongCodeSignal(text string) bool {
+	for _, needle := range []string{
+		"\npackage ", "package main", "\nfunc ", "func main", "\nimport ", "#!",
+		"{", "}", ";", ":=", "=>", "::", "</", "<?", "def ", "class ",
+		"SELECT ", "FROM ",
+	} {
+		if strings.Contains(text, needle) {
+			return true
+		}
+	}
+	return false
+}
+
+func looksLikeProseLine(line string) bool {
+	if line == "" {
+		return false
+	}
+	trimmed := strings.TrimLeft(line, "-*0123456789. )")
+	words := strings.Fields(trimmed)
+	if len(words) < 3 {
+		return false
+	}
+	return strings.ContainsAny(trimmed, " .,?!'\"`*")
 }
 
 // highlightCode renders source with the given chroma lexer using the same class-

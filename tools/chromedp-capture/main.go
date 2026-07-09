@@ -335,6 +335,9 @@ func main() {
 			const selectors = {
 				markdown_body: ".markdown-body",
 				markdown_table: ".markdown-body table:not(.report-table)",
+				plain_data_table: ".plain-data-table",
+				plain_table_section: ".plain-table-section",
+				plain_table_meta: ".plain-table-meta",
 				article_overview: ".article-overview",
 				report_summary: ".report-summary",
 				report_table: ".report-table",

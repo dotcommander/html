@@ -1432,6 +1432,28 @@ body::before {
   background: color-mix(in srgb, var(--code-bg) 60%, transparent);
 }
 
+.plain-table-section {
+  margin: 0 0 1.8rem;
+}
+
+.plain-table-section h2 {
+  margin-bottom: 0.45rem;
+}
+
+.markdown-body pre.plain-table-meta {
+  display: inline-block;
+  max-width: 100%;
+  margin-bottom: 0.75rem;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.78em;
+  line-height: 1.35;
+  box-shadow: none;
+}
+
+.markdown-body pre.plain-table-meta code {
+  white-space: pre-wrap;
+}
+
 /* Narrow viewports: wide tables scroll horizontally instead of forcing the
    whole page wider than the screen. */
 @media (max-width: 45rem) {

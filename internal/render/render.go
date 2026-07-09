@@ -32,7 +32,11 @@ func newMarkdown(unsafe bool, codeTheme string) goldmark.Markdown {
 		highlighting.WithFormatOptions(chromahtml.WithClasses(true)),
 	}
 	if ValidCodeTheme(codeTheme) {
-		highlightOpts = append(highlightOpts, highlighting.WithStyle(codeTheme))
+		style := codeTheme
+		if style == "" {
+			style = "github"
+		}
+		highlightOpts = append(highlightOpts, highlighting.WithStyle(style))
 	}
 	opts := []goldmark.Option{
 		goldmark.WithExtensions(

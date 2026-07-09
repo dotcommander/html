@@ -189,6 +189,16 @@ func TestMarkdownTableCSSFitsContentAndScrollsOnMobile(t *testing.T) {
 	assert.Contains(t, css, ".markdown-body table:not(.report-table) {\n    display: block;\n    width: max-content;\n    max-width: 100%;\n    overflow-x: auto;")
 }
 
+func TestPlainTableSectionCSSKeepsMetadataCompact(t *testing.T) {
+	t.Parallel()
+
+	css := baseCSS()
+
+	assert.Contains(t, css, ".plain-table-section {\n  margin: 0 0 1.8rem;")
+	assert.Contains(t, css, ".markdown-body pre.plain-table-meta {\n  display: inline-block;")
+	assert.Contains(t, css, ".markdown-body pre.plain-table-meta code {\n  white-space: pre-wrap;")
+}
+
 func TestTextOverviewCSSProvidesPills(t *testing.T) {
 	t.Parallel()
 
