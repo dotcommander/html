@@ -284,7 +284,9 @@ func TestReportJSReviewCommentsPersistAndCopy(t *testing.T) {
 	js := reportJS()
 
 	assert.Contains(t, js, `.review-card .review-comment`)
-	assert.Contains(t, js, "`html-review:${el.dataset.reviewId || \"\"}`")
+	assert.Contains(t, js, "`html-review:v2:${documentDigest}:${rowDigest}:${occurrence}`")
+	assert.Contains(t, js, `el.dataset.reviewLabel || "record"`)
+	assert.NotContains(t, js, "html-review:${")
 	assert.Contains(t, js, `localStorage.getItem(keyFor(el))`)
 	assert.Contains(t, js, `localStorage.setItem(keyFor(el), el.value)`)
 	assert.Contains(t, js, `# Review comments`)

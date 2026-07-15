@@ -2,12 +2,12 @@
 
 ## Project Structure & Module Organization
 
-This repository is a Go CLI module, `github.com/dotcommander/html`, for rendering Markdown or plain input into self-contained HTML. The executable entry point lives in `cmd/html/main.go`. Core behavior is under `internal/`: `cli` wires Cobra flags, `actions` orchestrates input/cache/render/open flow, `config` loads optional user config, `open` launches the browser, and `render` owns Markdown/plain rendering plus embedded assets. CSS and browser-side scripts are embedded from `internal/render/assets/`. Tests sit beside the package code as `*_test.go`. Static prototype examples live under `prototypes/`; shell verification helpers live in `scripts/`.
+This repository is a Go CLI module, `github.com/dotcommander/html`, for rendering Markdown or plain input into self-contained HTML. The executable entry point lives in `cmd/html/main.go`. Core behavior is under `internal/`: `cli` uses the standard `flag` package, `actions` orchestrates input/cache/render/open flow, `config` loads optional user config, `open` launches the browser, and `render` owns Markdown/plain rendering plus embedded assets. CSS and browser-side scripts are embedded from `internal/render/assets/`. Tests sit beside the package code as `*_test.go`. Static prototype examples live under `prototypes/`; shell verification helpers live in `scripts/`.
 
 ## Build, Test, and Development Commands
 
 - `just build` or `go build -o html ./cmd/html`: build the local CLI binary.
-- `just install`: build and symlink `./html` into `~/go/bin/html`.
+- `just install`: install with `go install ./cmd/html` into `GOBIN` or the first `GOPATH/bin`.
 - `just test` or `go test ./...`: run the full Go test suite.
 - `just vet` or `go vet ./...`: run Go static checks.
 - `just check`: run tests and vet.

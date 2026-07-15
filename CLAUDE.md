@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 go build ./cmd/html/                  # build
-go build -o html ./cmd/html/ && ln -sf "$(pwd)/html" ~/go/bin/html   # install to PATH
+go install ./cmd/html                    # install to GOBIN or GOPATH/bin
 
 html README.md            # render + open in browser, prints cache path
 html -n README.md         # --no-open: render only, don't launch browser
@@ -41,17 +41,20 @@ go vet ./...
 
 No `.golangci.yml` or Makefile exists. All tests use `t.Parallel()` (top-level and subtests), `t.TempDir()`, and `t.Cleanup()` — never `defer`. No `testing.Short()` gates, no build tags, no `testdata/` golden files.
 
-**Test gotcha:** tests write to the *real* `~/.config/html/cache/`, not a temp cache dir. Each test uses a unique temp source file so its `sha256` cache key is distinct, and registers a `t.Cleanup` to delete its cache entry. A crashed test can leave a stale cache file that makes a later `Fresh()` check skip a render — clear `~/.config/html/cache/` if tests behave inconsistently.
+**Test isolation:** package `TestMain` functions set `HTML_CACHE_DIR` to temporary
+directories, so tests do not read or write the real user cache.
 
-**Browser QA gotcha:** for static HTML layout checks in this repo, `agent-browser` has repeatedly produced unusable captures: first an unwritable `~/.agent-browser` socket, then missing/empty screenshots after retrying through the shared capture helper. The reliable path is `just qa-browser`, backed by the repo-local chromedp helper under `tools/chromedp-capture`, which launches a disposable Chrome profile, sets explicit viewport metrics, captures full-page PNGs, checks console errors, and reports `clientWidth`/`scrollWidth` overflow evidence. Prefer chromedp for final responsive comparisons here when `agent-browser` output is blank, tiny, stale, or missing.
+**Browser QA:** run `just qa-browser`. The source-owned chromedp helper under
+`tools/chromedp-capture` launches a disposable profile, captures explicit
+desktop/mobile viewports, checks console errors, and records overflow evidence.
 
 ## Architecture
 
-Linear pipeline with one cobra command and optional user config loaded at the CLI boundary. A Markdown file flows:
+Linear pipeline with one standard-library `flag` command and optional user config loaded at the CLI boundary. A Markdown file flows:
 
 ```
 cmd/html/main.go            entrypoint (<20 lines), prints errors with "html:" prefix
-  └─ internal/cli/root.go   cobra wiring, parses --no-open/--force, always prints cache path to stdout
+  └─ internal/cli/root.go   standard flag wiring, metadata paths, and argument normalization
        └─ internal/actions/run.go   orchestration (stat → cache check → render → open)
             ├─ internal/cache/cache.go    cache key, freshness, atomic write
             └─ internal/render/
@@ -60,13 +63,16 @@ cmd/html/main.go            entrypoint (<20 lines), prints errors with "html:" p
                  └─ embed.go    //go:embed assets/base.css + assets/copy.js
 ```
 
-**`actions.Run`** is the orchestrator: `os.Stat` validates the source; `cache.Fresh` compares mtimes; if stale or `--force`, it reads the source through `io.LimitReader(f, 32<<20)` (32 MiB cap — never `io.ReadAll` unbounded), calls `render.Render`, and `cache.Write`. Then `exec.Command("open", path).Start()` (fire-and-forget) unless `--no-open`. The fallback title is the source basename without extension.
+**`actions.Run`** is the orchestrator: it validates and reads the source through
+`io.LimitReader(f, 32<<20)`, checks the content-aware cache fingerprint, renders,
+and atomically writes the cache or stable output. It opens the result unless
+`--no-open`. The fallback title is the source basename without extension.
 
 **`render.Render(src, fallbackTitle)`** uses a package-level `goldmark` singleton (`render.go`) built once at init. Then `wrapPage` inlines everything — `baseCSS()` + generated chroma CSS into one `<style>`, `copyJS()` into one `<script>` — producing a zero-external-resource document.
 
 ### Load-bearing design decisions (and where they live)
 
-- **Input: file or stdin** — `actions.Run` branches on `Options.Stdin`: a file is validated with `os.Stat`, mode-selected by extension (`.md`/`.markdown` → Markdown, every other extension → plain), and served from the mtime cache fast-path when fresh; piped stdin is always read first (bounded by the same 32 MiB `io.LimitReader` cap), content-type **auto-detected** (`render.Detect`), and cached by `sha256(content)` (`cache.PathForContent`/`FreshContent`/`WriteContent`) — there is no mtime, so the content hash *is* the key. `--plain`/`--markdown` override detection; `--title`/`-t` sets the stdin page title (default `"stdin"`). Empty stdin and a non-piped invocation with no file argument both error.
+- **Input: file or stdin** — `actions.Run` branches on `Options.Stdin`: a file is validated with `os.Stat`, mode-selected by extension (`.md`/`.markdown` → Markdown, every other extension → plain), and validated by source digest plus renderer fingerprint; piped stdin is always read first (bounded by the same 32 MiB cap), content-type **auto-detected** (`render.Detect`), and cached by `sha256(content)`. `--plain`/`--markdown` override detection; `--title`/`-t` sets the stdin page title (default `"stdin"`). Empty stdin and a non-piped invocation with no file argument both error.
 - **Robust input-type detection** — `render.Detect` (`detect.go`) classifies a bounded scan window (64 KiB / 256 lines) as binary, Markdown, or plain. Normal document rendering refuses binary input (a NUL byte, or >10% non-text bytes) so a piped image/executable never renders as garbage; report mode is the exception and renders binary as a safe hex/ascii preview through `render.RenderReport`. **Markdown requires a high-confidence structural signal** (a fenced code block, a GFM table, a GFM task list, a setext heading, or an ATX heading followed by a blank line/EOF); weak inline cues (a `# comment` line, `__dunder__`, backticks, `arr[i](x)` reading as a link) are intentionally *not* decisive, so scripts, diffs, JSON/YAML, and logs stay plain. Trade-off: prose with only inline Markdown cues renders plain unless you pass `-m`.
 - **Plain render mode** — `render.Render` with `Options.Plain` set bypasses goldmark entirely (`plain.go`) and picks the most faithful body, all reusing `wrapPage` (theme/palette controls, width override, copy button): (1) ANSI-colored input → `renderANSI` (`ansi.go`) converts SGR sequences to inline-styled `<span>`s so `git diff --color`/`tree -C` keep their colors; (2) otherwise a chroma lexer is chosen via `pickLexer` (explicit `Options.Lang`, then `lexers.Match` on `Options.SourceName` for files, then bounded `lexers.Analyse` of the content for stdin) and the source is syntax-highlighted with the same class-based formatter as Markdown code blocks — so the existing `highlightCSS` styles it, no new CSS; (3) otherwise raw HTML-escaped `<pre><code class="language-plaintext">`. `Lang` of `text`/`none`/`plain` forces raw. Output-affecting mode, language, theme, palette, and title fields fold into the fingerprint via `cacheTag`.
 - **Terminal-window frame** — `--frame` (opt-in, plain-path only) wraps the plain/ANSI body in faux terminal chrome (title bar + traffic-light dots) via `terminalFrame` (`page.go`), injecting `assets/frame.css` into `wrapPage` *only when* `render.Options.Frame` is set. It **implies plain rendering** — `actions.RunWithResult` forces `Plain=true`, and the CLI rejects `--frame` with `--markdown` or any report flag. It is output-affecting, so it folds into the fingerprint as `+frame`. The Markdown path stays byte-identical because the frame markup is gated on `opts.Frame`, which is only ever true on the plain path; no `renderSchemaVersion` bump was needed — the new `frame.css` asset already busts the fingerprint once.

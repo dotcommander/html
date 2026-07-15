@@ -26,6 +26,10 @@ import (
 // WithUnsafe renderer option, expressed as data rather than two near-duplicate
 // constructors.
 func newMarkdown(unsafe bool, codeTheme string) goldmark.Markdown {
+	return newMarkdownWithImageLimit(unsafe, codeTheme, maxInlineImages)
+}
+
+func newMarkdownWithImageLimit(unsafe bool, codeTheme string, imageLimit int64) goldmark.Markdown {
 	highlightOpts := []highlighting.Option{
 		// WithClasses emits CSS class names (e.g. .chroma .k) rather than
 		// inline styles, so highlightCSS controls colors and dark mode works.
@@ -38,6 +42,10 @@ func newMarkdown(unsafe bool, codeTheme string) goldmark.Markdown {
 		}
 		highlightOpts = append(highlightOpts, highlighting.WithStyle(style))
 	}
+	imageTransformer := parser.ASTTransformer(imageInliner{maxTotal: imageLimit})
+	if !unsafe {
+		imageTransformer = safeImagePlaceholder{}
+	}
 	opts := []goldmark.Option{
 		goldmark.WithExtensions(
 			extension.GFM,
@@ -45,7 +53,7 @@ func newMarkdown(unsafe bool, codeTheme string) goldmark.Markdown {
 		),
 		goldmark.WithParserOptions(
 			parser.WithAutoHeadingID(),
-			parser.WithASTTransformers(util.Prioritized(imageInliner{}, 100)),
+			parser.WithASTTransformers(util.Prioritized(imageTransformer, 100)),
 		),
 	}
 	if unsafe {
@@ -109,7 +117,8 @@ type Options struct {
 	// SourceName is the input's file name (with extension) when known, used to
 	// detect the highlight language by filename; "" for stdin (content-detected).
 	SourceName string
-	// directory local image refs resolve against ("" disables image inlining)
+	// SourceDir is the directory trusted local image refs resolve against. Safe
+	// rendering ignores it and never reads image destinations.
 	SourceDir string
 	// ImageFingerprint captures local image dependencies that are inlined into
 	// Markdown output. It is computed by callers that have the source bytes and

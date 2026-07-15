@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/dotcommander/html/internal/atomicfile"
 )
 
 // dir returns the cache directory path (~/.config/html/cache).
@@ -92,6 +94,9 @@ func freshAt(cachePath string, notBefore time.Time, wantFP string) (bool, error)
 	if err != nil {
 		return false, fmt.Errorf("cache: stat cache: %w", err)
 	}
+	if err := tightenExisting(cachePath); err != nil {
+		return false, err
+	}
 	// Stale if the source is newer than the cache (path-keyed callers only).
 	if !notBefore.IsZero() && notBefore.After(cacheInfo.ModTime()) {
 		return false, nil
@@ -101,11 +106,35 @@ func freshAt(cachePath string, notBefore time.Time, wantFP string) (bool, error)
 	return string(gotFP) == wantFP, nil
 }
 
-// Fresh reports whether a usable cached HTML already exists for srcPath:
-// the cache file exists, its mtime is >= the source's mtime, AND the stored
-// renderer fingerprint matches wantFP. Missing cache => false (rebuild).
-// A missing/unstattable source => error.
-func Fresh(srcPath, wantFP string) (bool, error) {
+// tightenExisting upgrades cache artifacts created by older releases before
+// they can be reused. This preserves cache hits without preserving public modes.
+func tightenExisting(cachePath string) error {
+	if err := os.Chmod(filepath.Dir(cachePath), 0o700); err != nil {
+		return fmt.Errorf("cache: chmod dir: %w", err)
+	}
+	for _, path := range []string{cachePath, fpPath(cachePath)} {
+		if err := os.Chmod(path, 0o600); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("cache: chmod %s: %w", filepath.Base(path), err)
+		}
+	}
+	return nil
+}
+
+const sourceFingerprintVersion = "source-sha256-v1"
+
+// sourceFingerprint binds a renderer fingerprint to the exact source bytes.
+// The version prefix intentionally invalidates cache entries written before
+// source digests were part of the cache contract.
+func sourceFingerprint(source []byte, rendererFingerprint string) string {
+	digest := sha256.Sum256(source)
+	return sourceFingerprintVersion + ":" + hex.EncodeToString(digest[:]) + ":" + rendererFingerprint
+}
+
+// Fresh reports whether a usable cached HTML already exists for srcPath: the
+// cache file exists, its mtime is >= the source's mtime, and its stored
+// fingerprint matches both source and renderer bytes. Missing cache => false
+// (rebuild). A missing/unstattable source => error.
+func Fresh(srcPath string, source []byte, wantFP string) (bool, error) {
 	srcInfo, err := os.Stat(srcPath)
 	if err != nil {
 		return false, fmt.Errorf("cache: stat source: %w", err)
@@ -114,7 +143,7 @@ func Fresh(srcPath, wantFP string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return freshAt(cachePath, srcInfo.ModTime(), wantFP)
+	return freshAt(cachePath, srcInfo.ModTime(), sourceFingerprint(source, wantFP))
 }
 
 // FreshContent reports whether a usable cached HTML already exists for an
@@ -175,8 +204,11 @@ func prepareDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := os.MkdirAll(d, 0o755); err != nil {
+	if err := os.MkdirAll(d, 0o700); err != nil {
 		return "", fmt.Errorf("cache: mkdir: %w", err)
+	}
+	if err := os.Chmod(d, 0o700); err != nil {
+		return "", fmt.Errorf("cache: chmod dir: %w", err)
 	}
 	prune(d, maxCacheAge)
 	return d, nil
@@ -185,18 +217,20 @@ func prepareDir() (string, error) {
 // writeAt atomically writes html and its fingerprint sidecar next to finalPath
 // (temp file + rename, so a concurrent reader never observes a partial file).
 func writeAt(finalPath, html, fingerprint string) error {
-	d := filepath.Dir(finalPath)
-	if err := atomicWrite(d, finalPath, html); err != nil {
-		return err
+	if err := atomicfile.Write(finalPath, []byte(html), 0o600); err != nil {
+		return fmt.Errorf("cache: write html: %w", err)
 	}
-	return atomicWrite(d, fpPath(finalPath), fingerprint)
+	if err := atomicfile.Write(fpPath(finalPath), []byte(fingerprint), 0o600); err != nil {
+		return fmt.Errorf("cache: write fingerprint: %w", err)
+	}
+	return nil
 }
 
 // Write atomically writes html to the cache path for srcPath (creating the
-// cache directory on first use) plus a fingerprint sidecar, and returns the
-// cache file path. Both writes are atomic (temp file + rename) so a concurrent
-// reader never observes a half-written file.
-func Write(srcPath, html, fingerprint string) (string, error) {
+// cache directory on first use) plus a fingerprint sidecar bound to source,
+// and returns the cache file path. Both writes are atomic (temp file + rename)
+// so a concurrent reader never observes a half-written file.
+func Write(srcPath string, source []byte, html, fingerprint string) (string, error) {
 	if _, err := prepareDir(); err != nil {
 		return "", err
 	}
@@ -204,7 +238,7 @@ func Write(srcPath, html, fingerprint string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := writeAt(finalPath, html, fingerprint); err != nil {
+	if err := writeAt(finalPath, html, sourceFingerprint(source, fingerprint)); err != nil {
 		return "", err
 	}
 	return finalPath, nil
@@ -225,34 +259,4 @@ func WriteContent(content []byte, html, fingerprint string) (string, error) {
 		return "", err
 	}
 	return finalPath, nil
-}
-
-// atomicWrite writes content to finalPath via a temp file in dir + rename, so a
-// concurrent reader never observes a partial file. The temp file is removed on
-// any error before the rename lands.
-func atomicWrite(dir, finalPath, content string) (err error) {
-	tmp, err := os.CreateTemp(dir, "*.tmp")
-	if err != nil {
-		return fmt.Errorf("cache: create temp: %w", err)
-	}
-	tmpName := tmp.Name()
-	defer func() {
-		if err != nil {
-			_ = os.Remove(tmpName)
-		}
-	}()
-	if _, err = tmp.WriteString(content); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("cache: write temp: %w", err)
-	}
-	if err = tmp.Close(); err != nil {
-		return fmt.Errorf("cache: close temp: %w", err)
-	}
-	if err = os.Chmod(tmpName, 0o644); err != nil {
-		return fmt.Errorf("cache: chmod temp: %w", err)
-	}
-	if err = os.Rename(tmpName, finalPath); err != nil {
-		return fmt.Errorf("cache: rename to cache: %w", err)
-	}
-	return nil
 }

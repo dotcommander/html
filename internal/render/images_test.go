@@ -1,12 +1,16 @@
 package render
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/text"
 )
 
 func TestInlineImage_LocalPNG(t *testing.T) {
@@ -71,4 +75,69 @@ func TestInlineImage_RemoteUnchanged(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, got, `src="https://example.com/x.png"`)
 	assert.NotContains(t, got, "base64")
+}
+
+func TestSafeImagesBecomeNonFetchingPlaceholders(t *testing.T) {
+	t.Parallel()
+
+	parent := t.TempDir()
+	baseDir := filepath.Join(parent, "docs")
+	require.NoError(t, os.Mkdir(baseDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(parent, "outside.png"), []byte("private bytes"), 0o644))
+	require.NoError(t, os.Symlink(filepath.Join(parent, "outside.png"), filepath.Join(baseDir, "linked.png")))
+
+	src := []byte(strings.Join([]string{
+		`![remote](https://example.com/tracker.png)`,
+		`![traversal](../outside.png)`,
+		`![symlink](linked.png)`,
+		`![unsafe <label> & text](local.png)`,
+	}, "\n\n"))
+	got, err := Render(src, Options{SourceDir: baseDir, FallbackTitle: "safe", Safe: true})
+	require.NoError(t, err)
+
+	assert.NotContains(t, got, "<img")
+	assert.NotContains(t, got, `src=`)
+	assert.NotContains(t, got, "tracker.png")
+	assert.NotContains(t, got, "outside.png")
+	assert.NotContains(t, got, "linked.png")
+	assert.NotContains(t, got, "private bytes")
+	assert.Contains(t, got, "[Image: remote]")
+	assert.Contains(t, got, "[Image: traversal]")
+	assert.Contains(t, got, "[Image: symlink]")
+	assert.Contains(t, got, "[Image: unsafe &lt;label&gt; &amp; text]")
+}
+
+func TestInlineImage_AggregateBudgetCountsRepeatedReferences(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmp, "repeat.png"), []byte("xx"), 0o644))
+	uri, ok := inlineImage(tmp, "repeat.png")
+	require.True(t, ok)
+	md := newMarkdownWithImageLimit(true, "", int64(len(uri)*2))
+	pc := parser.NewContext()
+	pc.Set(baseDirKey, tmp)
+	src := []byte("![one](repeat.png)\n![two](repeat.png)\n![three](repeat.png)\n")
+	doc := md.Parser().Parse(text.NewReader(src), parser.WithContext(pc))
+	var buf bytes.Buffer
+	require.NoError(t, md.Renderer().Render(&buf, src, doc))
+
+	got := buf.String()
+	assert.Equal(t, 2, strings.Count(got, "data:image/png;base64,"))
+	assert.Equal(t, 1, strings.Count(got, `src="repeat.png"`))
+}
+
+func TestInlineImage_PerImageBudgetLeavesReferenceExternal(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	f, err := os.Create(filepath.Join(tmp, "large.png"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = f.Close() })
+	require.NoError(t, f.Truncate(maxInlineImage+1))
+
+	got, err := Render([]byte("![large](large.png)\n"), Options{SourceDir: tmp, FallbackTitle: "t"})
+	require.NoError(t, err)
+	assert.Contains(t, got, `src="large.png"`)
+	assert.NotContains(t, got, "data:image/png;base64,")
 }

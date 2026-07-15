@@ -4,9 +4,8 @@ default:
 build:
     go build -o html ./cmd/html
 
-install: build
-    mkdir -p ~/go/bin
-    ln -sf "{{justfile_directory()}}/html" ~/go/bin/html
+install:
+    go install ./cmd/html
 
 test:
     go test ./...
@@ -15,6 +14,7 @@ vet:
     go vet ./...
 
 check: test vet
+    cd tools/chromedp-capture && go test ./... && go vet ./...
 
 installed-check:
     scripts/check-installed-html.sh

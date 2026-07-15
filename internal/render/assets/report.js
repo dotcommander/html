@@ -220,7 +220,12 @@
   const comments = Array.from(document.querySelectorAll(".review-card .review-comment"));
   if (comments.length === 0) return;
 
-  const keyFor = (el) => `html-review:${el.dataset.reviewId || ""}`;
+  const keyFor = (el) => {
+    const documentDigest = el.dataset.reviewDocument || "";
+    const rowDigest = el.dataset.reviewRow || "";
+    const occurrence = el.dataset.reviewOccurrence || "";
+    return `html-review:v2:${documentDigest}:${rowDigest}:${occurrence}`;
+  };
 
   comments.forEach((el) => {
     try {
@@ -242,8 +247,8 @@
     comments.forEach((el) => {
       const value = el.value.trim();
       if (!value) return;
-      const id = el.dataset.reviewId || "";
-      blocks.push(`## ${id}\n${value}`);
+      const label = el.dataset.reviewLabel || "record";
+      blocks.push(`## ${label}\n${value}`);
     });
     if (blocks.length === 0) return "";
     return `# Review comments\n\n${blocks.join("\n\n")}`;

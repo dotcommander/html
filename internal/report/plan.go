@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/dotcommander/html/internal/atomicfile"
 )
 
 func Plan(ctx context.Context, src []byte, opts Options) (Analysis, ReportPlan) {
@@ -235,6 +237,7 @@ func planWithLLM(ctx context.Context, src []byte, analysis Analysis, fallback Re
 		return ReportPlan{}, "llm planner invalid timeout: " + err.Error()
 	}
 	key, summary := llmCacheKey(src, analysis, opts)
+	securePlanCachePath(key)
 	if b, err := os.ReadFile(key); err == nil {
 		var p ReportPlan
 		if err := json.Unmarshal(b, &p); err == nil {
@@ -294,11 +297,24 @@ func planWithLLM(ctx context.Context, src []byte, analysis Analysis, fallback Re
 	if err := validatePlanForAnalysis(valid, analysis); err != nil {
 		return ReportPlan{}, "llm planner rejected: " + err.Error()
 	}
-	_ = os.MkdirAll(filepath.Dir(key), 0o755)
+	cacheDir := filepath.Dir(key)
+	_ = os.MkdirAll(cacheDir, 0o700)
+	_ = os.Chmod(cacheDir, 0o700)
 	if b, err := json.MarshalIndent(valid, "", "  "); err == nil {
-		_ = os.WriteFile(key, b, 0o644)
+		_ = atomicfile.Write(key, b, 0o600)
 	}
 	return valid, ""
+}
+
+func securePlanCachePath(path string) {
+	dir := filepath.Dir(path)
+	if os.MkdirAll(dir, 0o700) != nil {
+		return
+	}
+	_ = os.Chmod(dir, 0o700)
+	if err := os.Chmod(path, 0o600); err != nil && !os.IsNotExist(err) {
+		return
+	}
 }
 
 func validatePlanForAnalysis(p ReportPlan, a Analysis) error {
@@ -344,8 +360,8 @@ func llmSystemPrompt() string {
 
 func llmUserPrompt(analysis Analysis, fallback ReportPlan, summary string, src []byte) string {
 	sample := string(src)
-	if len(sample) > 8000 {
-		sample = sample[:8000]
+	if len(sample) > 8<<10 {
+		sample = sample[:8<<10]
 	}
 	return "Allowed kind: markdown, json-records, json-object, csv-records, tsv-records, table-records, diff, source-code, tree-listing, log, transcript, mixed, plain, binary.\n" +
 		"Allowed layout: single-page, tabbed-page, slides-page.\n" +

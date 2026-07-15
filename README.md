@@ -7,11 +7,15 @@
 ## Install
 
 ```bash
-# from the repo root
-go build -o html ./cmd/html/ && ln -sf "$(pwd)/html" ~/go/bin/html
+# Immutable release (recommended)
+go install github.com/dotcommander/html/cmd/html@v0.1.0
+
+# Latest published release
+go install github.com/dotcommander/html/cmd/html@latest
 ```
 
-Requires Go 1.26+. `~/go/bin` must be on your `PATH`.
+Requires Go 1.26.3 or newer on macOS, Linux, or Windows. The directory selected
+by `GOBIN` (or the first `GOPATH` entry plus `/bin`) must be on `PATH`.
 
 ## Quick start
 
@@ -32,7 +36,11 @@ cat main.go | html        # plain code is auto syntax-highlighted (language dete
 html data.json            # files highlight by extension (.go / .json / .py / …)
 ```
 
-Every output is a single self-contained `.html` file — open it offline, no network, no assets.
+Generated CSS and JavaScript are always embedded. In trusted Markdown mode,
+supported local images up to 10 MiB each are embedded until the document reaches
+the 32 MiB image budget; remote, missing, unsupported, oversized, and over-budget
+images remain external references. Repeated references count toward the budget.
+Plain text and stdin have no local-image base directory.
 
 ## Common flags
 
@@ -47,6 +55,7 @@ Every output is a single self-contained `.html` file — open it offline, no net
 | `-l`, `--lang <lang>` | syntax-highlight language for plain mode (`go`, `json`; `text` = none) |
 | `--frame` | wrap plain/ANSI output in a terminal-window frame, implies `--plain` (share-ready "screenshot") |
 | `--safe` | disable raw-HTML passthrough — use for untrusted Markdown |
+| `--version` | print the release version (`html devel` for local builds) |
 
 Run `html --help` for the full list, including the report-mode flags (`--mode`, `--layout`).
 
@@ -60,6 +69,27 @@ Files are decided by extension: `.md` / `.markdown` → Markdown, everything els
 
 Rendered pages are cached under `~/.config/html/cache/` and reused until the source changes. Use `-f` to force a re-render, or `-o <path>` to write the HTML somewhere stable to share or attach.
 
+Cache validity includes the source bytes, not only modification times. Cache
+directories are private to the current user. Stable outputs are written
+atomically, and `--output` refuses to overwrite the input through the same path,
+a symlink, or a hardlink.
+
+## Reports and optional planning
+
+Normal document rendering is the default. Report output is opt-in through
+`--plan`, `--mode`, `--layout`, or `--planner`. The deterministic planner is the
+default and performs no network request.
+
+The optional LLM planner requires an explicit `--planner auto` or `--planner llm`
+plus both `--llm-url` and `--llm-model`. The URL must be HTTP(S). A request may
+send analysis metadata and up to 8 KiB of input to that endpoint:
+
+```bash
+html data.json --plan --planner llm \
+  --llm-url https://example.invalid/v1/chat/completions \
+  --llm-model example-model --llm-timeout 10s
+```
+
 ## Browser QA
 
 Run the generated browser QA suite with:
@@ -68,24 +98,34 @@ Run the generated browser QA suite with:
 just qa-browser
 ```
 
-The suite regenerates `.work/html-qa/`, opens the generated pages through the repo-local chromedp helper at `tools/chromedp-capture`, captures desktop/mobile PNGs, and writes matching JSON metrics under `.work/html-qa/browser/`. The helper has been the reliable path for this repo: it launches a disposable Chrome profile, sets explicit viewport metrics, captures full-page screenshots, checks console errors, and records `clientWidth`/`scrollWidth` overflow evidence.
-
-`agent-browser` was tried for the same static HTML checks and failed in two ways: first on an unwritable `~/.agent-browser` socket, then with missing/empty screenshots after retrying through the shared capture helper. Prefer `just qa-browser`/chromedp for final responsive and rendered-output comparisons here, especially when validating theme controls, palette variants, generated components, image inlining, and SVG/raster display.
+The suite regenerates `.work/html-qa/`, uses the source-owned chromedp helper at
+`tools/chromedp-capture`, captures desktop/mobile PNGs, checks console errors and
+overflow, and writes JSON metrics under `.work/html-qa/browser/`.
 
 ## Configuration (optional)
 
-`~/.config/html/config.json` — every field optional; a missing file means default behavior:
+`~/.config/html/config.json` — every field is optional; a missing file means default behavior. This is valid JSON containing every supported key:
 
 ```json
 {
-  "open_command": "firefox",   // launcher; "" = OS default (open / xdg-open / start)
-  "max_width": "60rem",        // reader column width (any CSS length)
-  "default_theme": "dark",     // "light" | "dark" | "auto" ("" = follow system)
-  "default_palette": "blue",   // "sepia" | "blue" | "green" | "rose" | "catppuccin" ("" = sepia)
-  "toc": true                  // force a table of contents (omit = automatic for 4+ headings)
+  "open_command": "firefox",
+  "max_width": "60rem",
+  "default_theme": "dark",
+  "default_palette": "blue",
+  "default_code_theme": "dracula",
+  "toc": true
 }
 ```
 
+`open_command` defaults to the platform launcher. `max_width` accepts a CSS
+length. Theme values are `light`, `dark`, or `auto`; palettes are `sepia`,
+`"sepia" | "blue" | "green" | "rose" | "catppuccin"`;
+`default_code_theme` is a Chroma style.
+Omit `toc` to retain automatic table-of-contents selection.
+
 ## Safety
 
-Raw HTML in Markdown is passed through by default — these are your own local files. For untrusted input, pass `--safe` to strip raw-HTML passthrough.
+Raw HTML in Markdown is passed through by default for trusted local files. For
+untrusted input, pass `--safe`. Safe mode strips raw HTML, performs no local
+image reads or image fingerprinting, and renders Markdown images as escaped,
+non-fetching placeholders with no `src`. Ordinary links remain clickable.

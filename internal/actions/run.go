@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/dotcommander/html/internal/atomicfile"
 	"github.com/dotcommander/html/internal/cache"
 	"github.com/dotcommander/html/internal/open"
 	"github.com/dotcommander/html/internal/render"
@@ -106,6 +107,9 @@ func RunWithResult(opts Options) (Result, error) {
 }
 
 func runDocumentOutput(opts Options) (Result, error) {
+	if err := rejectOutputAlias(opts); err != nil {
+		return Result{}, err
+	}
 	src, fallbackTitle, sourceName, err := readInput(opts)
 	if err != nil {
 		return Result{}, err
@@ -128,7 +132,7 @@ func runDocumentOutput(opts Options) (Result, error) {
 	if opts.Stdout || opts.Output == "-" {
 		return Result{Stdout: htmlDoc}, nil
 	}
-	if err := os.WriteFile(opts.Output, []byte(htmlDoc), 0o644); err != nil {
+	if err := atomicfile.Write(opts.Output, []byte(htmlDoc), 0o644); err != nil {
 		return Result{}, fmt.Errorf("write output: %w", err)
 	}
 	if !opts.NoOpen {
@@ -140,6 +144,9 @@ func runDocumentOutput(opts Options) (Result, error) {
 }
 
 func runReport(opts Options) (Result, error) {
+	if err := rejectOutputAlias(opts); err != nil {
+		return Result{}, err
+	}
 	src, fallbackTitle, sourceName, err := readInput(opts)
 	if err != nil {
 		return Result{}, err
@@ -178,7 +185,7 @@ func runReport(opts Options) (Result, error) {
 		return Result{Stdout: htmlDoc}, nil
 	}
 	if opts.Output != "" {
-		if err := os.WriteFile(opts.Output, []byte(htmlDoc), 0o644); err != nil {
+		if err := atomicfile.Write(opts.Output, []byte(htmlDoc), 0o644); err != nil {
 			return Result{}, fmt.Errorf("write output: %w", err)
 		}
 		if !opts.NoOpen {
@@ -202,14 +209,14 @@ func runReport(opts Options) (Result, error) {
 			path, err = cache.WriteContent(src, htmlDoc, fp)
 		}
 	} else {
-		fresh, err := cache.Fresh(opts.File, fp)
+		fresh, err := cache.Fresh(opts.File, src, fp)
 		if err != nil {
 			return Result{}, err
 		}
 		if fresh && !opts.Force {
 			path, err = cache.PathFor(opts.File)
 		} else {
-			path, err = cache.Write(opts.File, htmlDoc, fp)
+			path, err = cache.Write(opts.File, src, htmlDoc, fp)
 		}
 	}
 	if err != nil {
@@ -251,6 +258,39 @@ func readInput(opts Options) (src []byte, fallbackTitle, sourceName string, err 
 		return nil, "", "", err
 	}
 	return src, strings.TrimSuffix(filepath.Base(opts.File), filepath.Ext(opts.File)), filepath.Base(opts.File), nil
+}
+
+func rejectOutputAlias(opts Options) error {
+	if opts.Stdin != nil || opts.File == "" || opts.Output == "" || opts.Output == "-" || opts.Stdout {
+		return nil
+	}
+	inputPath, err := filepath.Abs(opts.File)
+	if err != nil {
+		return fmt.Errorf("source path: %w", err)
+	}
+	outputPath, err := filepath.Abs(opts.Output)
+	if err != nil {
+		return fmt.Errorf("output path: %w", err)
+	}
+	if filepath.Clean(inputPath) == filepath.Clean(outputPath) {
+		return errors.New("output path aliases source file")
+	}
+
+	inputInfo, err := os.Stat(opts.File)
+	if err != nil {
+		return fmt.Errorf("source file: %w", err)
+	}
+	outputInfo, err := os.Stat(opts.Output)
+	if err == nil {
+		if os.SameFile(inputInfo, outputInfo) {
+			return errors.New("output path aliases source file")
+		}
+		return nil
+	}
+	if !os.IsNotExist(err) {
+		return fmt.Errorf("output path: %w", err)
+	}
+	return nil
 }
 
 func reportCacheTag(analysis report.Analysis, plan report.ReportPlan, opts Options) string {
@@ -315,7 +355,7 @@ func renderFile(opts Options) (string, error) {
 	addImageFingerprint(src, &renderOpts)
 	fp := render.Fingerprint(renderOpts)
 
-	fresh, err := cache.Fresh(opts.File, fp)
+	fresh, err := cache.Fresh(opts.File, src, fp)
 	if err != nil {
 		return "", err
 	}
@@ -327,7 +367,7 @@ func renderFile(opts Options) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return cache.Write(opts.File, htmlDoc, fp)
+	return cache.Write(opts.File, src, htmlDoc, fp)
 }
 
 // renderStdin renders piped data. The bytes must be read up front (to auto-detect
@@ -413,6 +453,9 @@ func buildRenderOpts(opts Options, fallbackTitle, sourceName string, plain bool)
 }
 
 func addImageFingerprint(src []byte, opts *render.Options) {
+	if opts.Safe {
+		return
+	}
 	if opts.Plain || opts.SourceDir == "" {
 		return
 	}

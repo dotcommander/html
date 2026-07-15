@@ -3,3 +3,10 @@
 
 # Scratch / specs / audits
 .work/
+
+# The machine-global ignore contains cache/; these are source-owned package tests.
+!/internal/cache/
+!/internal/cache/*_test.go
+
+# Build output for the nested browser QA helper.
+/tools/chromedp-capture/chromedp-capture

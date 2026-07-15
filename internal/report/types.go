@@ -157,9 +157,7 @@ func DefaultOptions() Options {
 	return Options{
 		Mode:       ModeOverrideAuto,
 		Layout:     LayoutOverrideAuto,
-		Planner:    PlannerAuto,
-		LLMURL:     "http://localhost:8000/v1/chat/completions",
-		LLMModel:   "Qwen3.6-35B-A3B-oQ4-fp16-mtp",
+		Planner:    PlannerOff,
 		LLMTimeout: "10s",
 	}
 }

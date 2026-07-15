@@ -20,7 +20,7 @@ capture() {
   shift 4
 
   local png="${out_dir}/${name}-${width}x${height}.png"
-  (cd "$capture_dir" && GOCACHE="${repo_dir}/.work/go-build" go run . --url "$url" --out "$png" --width "$width" --height "$height" "$@") >"$metric_file"
+  (cd "$capture_dir" && go run . --url "$url" --out "$png" --width "$width" --height "$height" "$@") >"$metric_file"
   local metrics
   metrics="$(cat "$metric_file")"
   printf '%s\n' "$metrics" >"${png%.png}.json"

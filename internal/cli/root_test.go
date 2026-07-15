@@ -47,7 +47,7 @@ func TestRoot_PipedPlainSmoke(t *testing.T) {
 	}
 }
 
-func TestRoot_HelpHidesLLMPlumbing(t *testing.T) {
+func TestRoot_HelpExposesPlannerConfiguration(t *testing.T) {
 	t.Parallel()
 	cmd := newRootCmd()
 	cmd.SetArgs([]string{"--help"})
@@ -61,9 +61,127 @@ func TestRoot_HelpHidesLLMPlumbing(t *testing.T) {
 	if !strings.Contains(got, "--planner") {
 		t.Fatalf("help should still expose planner policy, got:\n%s", got)
 	}
-	for _, hidden := range []string{"--llm-url", "--llm-model", "--llm-timeout", "Qwen", "localhost:8000"} {
-		if strings.Contains(got, hidden) {
-			t.Fatalf("help should hide %q, got:\n%s", hidden, got)
+	for _, visible := range []string{"--llm-url", "--llm-model", "--llm-timeout", "--version"} {
+		if !strings.Contains(got, visible) {
+			t.Fatalf("help should expose %q, got:\n%s", visible, got)
+		}
+	}
+}
+
+func TestRoot_VersionIsSideEffectFree(t *testing.T) {
+	t.Parallel()
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"--version"})
+	out := &bytes.Buffer{}
+	errOut := &bytes.Buffer{}
+	cmd.SetOut(out)
+	cmd.SetErr(errOut)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if got := strings.TrimSpace(out.String()); got != "html devel" {
+		t.Fatalf("version = %q, want %q", got, "html devel")
+	}
+	if errOut.Len() != 0 {
+		t.Fatalf("version wrote stderr: %q", errOut.String())
+	}
+}
+
+func TestFormatVersion_TaggedBuild(t *testing.T) {
+	t.Parallel()
+	if got := formatVersion("v0.1.0"); got != "html v0.1.0" {
+		t.Fatalf("formatVersion = %q", got)
+	}
+}
+
+func TestLocalBuildVersion_PseudoVersion(t *testing.T) {
+	t.Parallel()
+	for _, version := range []string{
+		"(devel)",
+		"v0.0.0-20260709181523-9e8e331c8d68",
+		"v1.2.4-0.20260709181523-9e8e331c8d68+dirty",
+	} {
+		if !localBuildVersion(version) {
+			t.Fatalf("%q should be classified as a local build", version)
+		}
+	}
+	if localBuildVersion("v0.1.0") {
+		t.Fatal("release tag classified as local build")
+	}
+}
+
+func TestRoot_GroupedBooleanShorthandsAndFlagsAfterFile(t *testing.T) {
+	t.Parallel()
+	source := filepath.Join(t.TempDir(), "input.md")
+	if err := os.WriteFile(source, []byte("# grouped\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{source, "-nf"})
+	out := &bytes.Buffer{}
+	cmd.SetOut(out)
+	cmd.SetErr(&bytes.Buffer{})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !strings.Contains(out.String(), ".html") {
+		t.Fatalf("expected cache path, got %q", out.String())
+	}
+}
+
+func TestRoot_EndOfOptionsAllowsDashPrefixedInput(t *testing.T) {
+	dir := t.TempDir()
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(old) })
+	if err := os.WriteFile("-notes.md", []byte("# notes\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"-n", "--", "-notes.md"})
+	out := &bytes.Buffer{}
+	cmd.SetOut(out)
+	cmd.SetErr(&bytes.Buffer{})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+}
+
+func TestRoot_DefaultPlannerDoesNotRequestReport(t *testing.T) {
+	t.Parallel()
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"--stdout"})
+	cmd.SetIn(strings.NewReader("ambiguous plain input\n"))
+	out := &bytes.Buffer{}
+	cmd.SetOut(out)
+	cmd.SetErr(&bytes.Buffer{})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if strings.Contains(out.String(), `class="report-`) {
+		t.Fatalf("default invocation unexpectedly selected report mode")
+	}
+}
+
+func TestRoot_PlannerRequiresExplicitEndpointAndModel(t *testing.T) {
+	t.Parallel()
+	for _, args := range [][]string{
+		{"--planner", "auto"},
+		{"--planner", "llm", "--llm-url", "ftp://example.com", "--llm-model", "test"},
+		{"--llm-url", "https://example.com/v1/chat/completions"},
+	} {
+		cmd := newRootCmd()
+		cmd.SetArgs(args)
+		cmd.SetIn(strings.NewReader("input\n"))
+		cmd.SetOut(&bytes.Buffer{})
+		cmd.SetErr(&bytes.Buffer{})
+		if err := cmd.Execute(); err == nil {
+			t.Fatalf("args %q unexpectedly succeeded", args)
 		}
 	}
 }
@@ -240,23 +358,15 @@ func TestRoot_ReportStdoutPrintsReportHTML(t *testing.T) {
 	}
 }
 
-func TestRoot_HiddenLLMFlagsRequestReportHTML(t *testing.T) {
+func TestRoot_LLMFlagsRequireExplicitPlanner(t *testing.T) {
 	t.Parallel()
 	cmd := newRootCmd()
 	cmd.SetArgs([]string{"--stdout", "--llm-url", "http://127.0.0.1:9/v1/chat/completions"})
 	cmd.SetIn(strings.NewReader(`[{"name":"a","score":1},{"name":"b","score":2}]`))
-	out := &bytes.Buffer{}
-	cmd.SetOut(out)
+	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("Execute: %v", err)
-	}
-	got := out.String()
-	if !strings.Contains(got, `class="report-table"`) {
-		t.Fatalf("hidden LLM planner flags must request report HTML, got:\n%s", got)
-	}
-	if strings.Contains(got, `class="language-plaintext"`) {
-		t.Fatalf("hidden LLM planner flags must not fall back to plain rendering, got:\n%s", got)
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "require explicit --planner") {
+		t.Fatalf("expected explicit planner error, got %v", err)
 	}
 }
 

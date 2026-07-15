@@ -18,14 +18,14 @@
       <h2>Rendered artifacts</h2>
       <p><code>render.Fingerprint()</code> combines the schema version, embedded assets, generated highlight CSS, and output-affecting options. That makes style changes invalidate stale cache entries even when the Markdown file has not changed.</p>
       <div class="code"><pre>html -n -f notes.md
-/Users/vampire/.config/html/cache/&lt;sha256&gt;.html</pre></div>
+~/.config/html/cache/&lt;sha256&gt;.html</pre></div>
       <h2>Behavior table</h2>
       <div class="table-box">
         <table class="data">
           <tr><th>Value</th><th>Produced by</th><th>Consumed by</th><th>Invalidates when</th></tr>
           <tr><td>cache key</td><td>absolute symlink-resolved path</td><td>cache.PathFor</td><td>source path target changes</td></tr>
           <tr><td>fingerprint</td><td>render assets + options</td><td>cache.Fresh</td><td>CSS, JS, schema, Chroma output changes</td></tr>
-          <tr><td>HTML page</td><td>render.Render</td><td>browser open command</td><td>source mtime or fingerprint changes</td></tr>
+          <tr><td>HTML page</td><td>render.Render</td><td>browser open command</td><td>source digest or fingerprint changes</td></tr>
         </table>
       </div>
     </article>
@@ -39,4 +39,3 @@
   </main>
 </body>
 </html>
-

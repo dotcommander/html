@@ -1,6 +1,7 @@
 package render
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -1717,7 +1718,40 @@ func TestRenderReport_ReviewCardsRenderTextareasAndCopy(t *testing.T) {
 
 	assert.Contains(t, got, `class="review-card"`)
 	assert.Contains(t, got, `class="review-copy"`)
-	assert.Contains(t, got, `<textarea class="review-comment" data-review-id="alpha"`)
-	assert.Contains(t, got, `<textarea class="review-comment" data-review-id="beta"`)
+	documentDigest := reviewDocumentDigest(src)
+	assert.Contains(t, got, `<textarea class="review-comment" data-review-document="`+documentDigest+`"`)
+	assert.Contains(t, got, `data-review-label="alpha"`)
+	assert.Contains(t, got, `data-review-label="beta"`)
 	assert.Contains(t, got, cardField("note", "first"))
+}
+
+func TestRenderReport_ReviewCommentKeysScopeDuplicateRows(t *testing.T) {
+	t.Parallel()
+
+	src := []byte(`[{"name":"same","note":"x"},{"name":"same","note":"x"},{"name":"same","note":"y"}]`)
+	analysis := report.Analyze(src, "values.json")
+	plan := report.ReportPlan{
+		Version: report.PlanVersion,
+		Kind:    report.KindJSONRecords,
+		Layout:  report.LayoutReview,
+		Mode:    report.ModeReview,
+		Components: []report.Component{
+			{Type: report.ComponentReview, Source: "records", Title: "Review", Options: map[string]string{}},
+		},
+	}
+
+	got, err := RenderReport(src, Options{FallbackTitle: "values"}, analysis, plan)
+	require.NoError(t, err)
+	attrs := regexp.MustCompile(`data-review-document="([0-9a-f]{64})" data-review-row="([0-9a-f]{64})" data-review-occurrence="([0-9]+)" data-review-label="([^"]*)"`).FindAllStringSubmatch(got, -1)
+	require.Len(t, attrs, 3)
+
+	assert.Equal(t, reviewDocumentDigest(src), attrs[0][1])
+	assert.Equal(t, attrs[0][1], attrs[1][1])
+	assert.Equal(t, attrs[0][1], attrs[2][1])
+	assert.Equal(t, attrs[0][2], attrs[1][2], "exact duplicate rows share their canonical digest")
+	assert.NotEqual(t, attrs[0][2], attrs[2][2], "different row content gets a different digest")
+	assert.Equal(t, "1", attrs[0][3])
+	assert.Equal(t, "2", attrs[1][3])
+	assert.Equal(t, "1", attrs[2][3])
+	assert.Equal(t, "same", attrs[0][4], "storage identity is separate from the export label")
 }

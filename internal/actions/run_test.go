@@ -84,6 +84,97 @@ func TestRun_OutputIncludesConfiguredCodeTheme(t *testing.T) {
 	assert.Contains(t, html, "#282a36")
 }
 
+func TestRun_RejectsOutputAliasesSource(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		outputPath func(t *testing.T, dir, source string) string
+	}{
+		{
+			name: "lexical",
+			outputPath: func(_ *testing.T, dir, _ string) string {
+				return filepath.Join(dir, ".", "source.md")
+			},
+		},
+		{
+			name: "symlink",
+			outputPath: func(t *testing.T, dir, source string) string {
+				output := filepath.Join(dir, "source-link.html")
+				require.NoError(t, os.Symlink(source, output))
+				return output
+			},
+		},
+		{
+			name: "hardlink",
+			outputPath: func(t *testing.T, dir, source string) string {
+				output := filepath.Join(dir, "source-hardlink.html")
+				require.NoError(t, os.Link(source, output))
+				return output
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			source := filepath.Join(dir, "source.md")
+			original := []byte("# Preserve me\n")
+			require.NoError(t, os.WriteFile(source, original, 0o644))
+			output := tt.outputPath(t, dir, source)
+
+			_, err := RunWithResult(Options{File: source, Output: output, NoOpen: true})
+			require.ErrorContains(t, err, "output path aliases source file")
+			got, readErr := os.ReadFile(source)
+			require.NoError(t, readErr)
+			assert.Equal(t, original, got)
+		})
+	}
+}
+
+func TestRun_AtomicOutputPreservesExistingDestinationOnFailure(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	source := filepath.Join(dir, "source.md")
+	output := filepath.Join(dir, "output.html")
+	require.NoError(t, os.WriteFile(source, []byte("# Source\n"), 0o644))
+	require.NoError(t, os.Mkdir(output, 0o755))
+	sentinel := filepath.Join(output, "sentinel")
+	require.NoError(t, os.WriteFile(sentinel, []byte("keep"), 0o644))
+
+	_, err := RunWithResult(Options{File: source, Output: output, NoOpen: true})
+	require.ErrorContains(t, err, "write output")
+	got, readErr := os.ReadFile(sentinel)
+	require.NoError(t, readErr)
+	assert.Equal(t, "keep", string(got))
+
+	entries, readDirErr := os.ReadDir(dir)
+	require.NoError(t, readDirErr)
+	for _, entry := range entries {
+		assert.NotContains(t, entry.Name(), ".output.html.tmp-", "failed atomic write left a temporary file")
+	}
+}
+
+func TestRun_OutputUsesStableMode(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	output := filepath.Join(dir, "output.html")
+	require.NoError(t, os.WriteFile(output, []byte("old"), 0o600))
+
+	_, err := RunWithResult(Options{
+		Stdin:  strings.NewReader("# Source\n"),
+		Output: output,
+		NoOpen: true,
+	})
+	require.NoError(t, err)
+	info, err := os.Stat(output)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o644), info.Mode()&0o777)
+}
+
 func TestRun_RejectsUnknownCodeTheme(t *testing.T) {
 	t.Parallel()
 

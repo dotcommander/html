@@ -2,7 +2,9 @@ package render
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/csv"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	htmlpkg "html"
@@ -924,11 +926,10 @@ func recordCardTitle(n int, labels, row []string) string {
 	return escapeTableText(fallback)
 }
 
-// recordID derives a stable per-record identifier for the review textarea,
+// recordLabel derives a human-readable per-record label for comment exports,
 // reusing recordCardTitle's preferred-field order (name, title, id, key) and
-// falling back to the 1-based record number. The returned value is HTML-attr
-// safe (escaped) — it is emitted only inside a double-quoted attribute.
-func recordID(n int, labels, row []string) string {
+// falling back to the 1-based record number.
+func recordLabel(n int, labels, row []string) string {
 	for _, preferred := range []string{"name", "title", "id", "key"} {
 		for i, label := range labels {
 			if !strings.EqualFold(strings.TrimSpace(label), preferred) || i >= len(row) {
@@ -938,15 +939,29 @@ func recordID(n int, labels, row []string) string {
 			if value == "" {
 				continue
 			}
-			return htmlpkg.EscapeString(value)
+			return value
 		}
 	}
-	return htmlpkg.EscapeString(fmt.Sprintf("record-%d", n))
+	return fmt.Sprintf("record-%d", n)
+}
+
+func reviewDocumentDigest(src []byte) string {
+	sum := sha256.Sum256(src)
+	return hex.EncodeToString(sum[:])
+}
+
+// canonicalRowDigest hashes the complete presented row shape rather than its
+// display label. JSON array encoding keeps field boundaries unambiguous.
+func canonicalRowDigest(labels, row []string) string {
+	canonical, _ := json.Marshal([][]string{labels, row})
+	sum := sha256.Sum256(canonical)
+	return hex.EncodeToString(sum[:])
 }
 
 // reviewCards mirrors recordCards but adds a per-record comment <textarea>
-// (keyed by recordID for localStorage persistence) and a single top-level
-// "Copy all comments" button. The interactive behavior lives in report.js.
+// (keyed by document, canonical row, and duplicate occurrence for localStorage
+// persistence) and a single top-level "Copy all comments" button. The
+// interactive behavior lives in report.js.
 func reviewCards(src []byte, analysis report.Analysis) string {
 	headers, rows := tableRows(src, analysis)
 	if len(headers) == 0 {
@@ -957,10 +972,13 @@ func reviewCards(src []byte, analysis report.Analysis) string {
 	}
 	labels := headerLabels(headers)
 	type reviewItem struct {
-		card recordCard
-		id   string
+		card       recordCard
+		rowDigest  string
+		occurrence int
+		label      string
 	}
 	items := make([]reviewItem, 0, len(rows))
+	occurrences := make(map[string]int)
 	stats := recordCardStats{Cards: len(rows)}
 	for i, row := range rows {
 		card := recordCard{Title: recordCardTitle(i+1, labels, row)}
@@ -971,8 +989,16 @@ func reviewCards(src []byte, analysis report.Analysis) string {
 			card.Fields = append(card.Fields, recordCardField{Label: label, Value: row[j]})
 			stats.VisibleFields++
 		}
-		items = append(items, reviewItem{card: card, id: recordID(i+1, labels, row)})
+		rowDigest := canonicalRowDigest(labels, row)
+		occurrences[rowDigest]++
+		items = append(items, reviewItem{
+			card:       card,
+			rowDigest:  rowDigest,
+			occurrence: occurrences[rowDigest],
+			label:      recordLabel(i+1, labels, row),
+		})
 	}
+	documentDigest := reviewDocumentDigest(src)
 	var b strings.Builder
 	b.WriteString(recordCardsOverview(stats))
 	b.WriteString(`<button type="button" class="review-copy">Copy all comments</button>`)
@@ -986,7 +1012,7 @@ func reviewCards(src []byte, analysis report.Analysis) string {
 			b.WriteString(escapeTableText(field.Value))
 			b.WriteString(`</dd></div>`)
 		}
-		fmt.Fprintf(&b, `</dl><textarea class="review-comment" data-review-id="%s" aria-label="Comment"></textarea></article>`, item.id)
+		fmt.Fprintf(&b, `</dl><textarea class="review-comment" data-review-document="%s" data-review-row="%s" data-review-occurrence="%d" data-review-label="%s" aria-label="Comment"></textarea></article>`, documentDigest, item.rowDigest, item.occurrence, htmlpkg.EscapeString(item.label))
 	}
 	b.WriteString(`</div>`)
 	return b.String()
