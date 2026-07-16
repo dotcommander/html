@@ -792,7 +792,7 @@ body::before {
   color: var(--muted);
 }
 
-.report-timeline-list {
+.markdown-body .report-timeline-list {
   position: relative;
   margin: 0;
   padding: 0;
