@@ -34,6 +34,9 @@ func (alertTransformer) Transform(doc *ast.Document, reader text.Reader, _ parse
 			return ast.WalkContinue, nil
 		}
 		blockquote := node.(*ast.Blockquote)
+		if blockquote.Parent() != doc {
+			return ast.WalkContinue, nil
+		}
 		paragraph, ok := blockquote.FirstChild().(*ast.Paragraph)
 		if !ok {
 			return ast.WalkContinue, nil
@@ -45,6 +48,9 @@ func (alertTransformer) Transform(doc *ast.Document, reader text.Reader, _ parse
 		markerLine := bytes.TrimRight(markerSegment.Value(source), " \t\r\n")
 		alertType, ok := parseAlertMarker(markerLine)
 		if !ok {
+			return ast.WalkContinue, nil
+		}
+		if paragraph.Lines().Len() == 1 && paragraph.NextSibling() == nil {
 			return ast.WalkContinue, nil
 		}
 

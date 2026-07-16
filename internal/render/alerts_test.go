@@ -89,3 +89,17 @@ func TestRender_InvalidAlertMarkerRemainsBlockquote(t *testing.T) {
 	assert.Contains(t, got, "[!UNKNOWN]")
 	assert.NotContains(t, got, "markdown-alert")
 }
+
+func TestRender_GitHubAlertContextBoundaries(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("> [!NOTE]\n\n> outer\n> > [!TIP]\n> > nested\n\n- item\n  > [!WARNING]\n  > nested in list\n")
+	got, err := Render(src, Options{FallbackTitle: "boundaries"})
+	require.NoError(t, err)
+
+	assert.Equal(t, 4, strings.Count(got, "<blockquote>"))
+	assert.Contains(t, got, "[!NOTE]")
+	assert.Contains(t, got, "[!TIP]")
+	assert.Contains(t, got, "[!WARNING]")
+	assert.NotContains(t, got, "markdown-alert")
+}

@@ -1,0 +1,11 @@
+{
+  "github": {
+    "blockquotes": 4,
+    "headings": 1
+  },
+  "local": {
+    "blockquotes": 4,
+    "headings": 1
+  },
+  "known_deltas": []
+}
