@@ -1,5 +1,5 @@
-bytes=71938
-sha256=5bf7817eda6f676854df44aba5f8931958bce373bddc8745ef96e836f227dc10
+bytes=71953
+sha256=e719928e64351965fbd3a49db2552529efcd651c06df35801df6e913040889b1
 --- article ---
 <article class="markdown-body">
 <div class="term-frame"><div class="term-bar"><span class="term-dots"><i></i><i></i><i></i></span><span class="term-title">command-output</span></div><div class="term-body"><pre><code class="language-ansi"><span style="color:#00aa00">PASS</span> render contract

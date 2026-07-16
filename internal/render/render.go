@@ -57,7 +57,7 @@ func newMarkdownWithImageLimit(unsafe bool, codeTheme string, imageLimit int64, 
 	opts := []goldmark.Option{
 		goldmark.WithExtensions(
 			extension.GFM,
-			githubAlerts,
+			alertExtension{},
 			highlighting.NewHighlighting(highlightOpts...),
 		),
 		goldmark.WithParserOptions(

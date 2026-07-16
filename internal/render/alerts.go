@@ -14,18 +14,6 @@ import (
 
 const alertTypeAttribute = "html-alert-type"
 
-var alertLabels = map[string]string{
-	"note":      "Note",
-	"tip":       "Tip",
-	"important": "Important",
-	"warning":   "Warning",
-	"caution":   "Caution",
-}
-
-// githubAlerts implements GitHub's blockquote-based alert syntax without raw
-// HTML nodes. Its renderer therefore behaves identically in safe mode.
-var githubAlerts goldmark.Extender = alertExtension{}
-
 type alertExtension struct{}
 
 func (alertExtension) Extend(md goldmark.Markdown) {
@@ -78,10 +66,27 @@ func parseAlertMarker(value []byte) (string, bool) {
 		return "", false
 	}
 	alertType := strings.ToLower(string(value[2:end]))
-	if _, ok := alertLabels[alertType]; !ok {
+	if _, ok := alertLabel(alertType); !ok {
 		return "", false
 	}
 	return alertType, true
+}
+
+func alertLabel(alertType string) (string, bool) {
+	switch alertType {
+	case "note":
+		return "Note", true
+	case "tip":
+		return "Tip", true
+	case "important":
+		return "Important", true
+	case "warning":
+		return "Warning", true
+	case "caution":
+		return "Caution", true
+	default:
+		return "", false
+	}
 }
 
 func removeAlertMarkerLine(paragraph *ast.Paragraph) {
@@ -116,8 +121,9 @@ func renderAlertBlockquote(w util.BufWriter, _ []byte, node ast.Node, entering b
 		return ast.WalkContinue, nil
 	}
 	if entering {
+		label, _ := alertLabel(alertType)
 		_, _ = w.WriteString(`<div class="markdown-alert markdown-alert-` + alertType + `">`)
-		_, _ = w.WriteString(`<p class="markdown-alert-title">` + alertLabels[alertType] + "</p>\n")
+		_, _ = w.WriteString(`<p class="markdown-alert-title">` + label + "</p>\n")
 	} else {
 		_, _ = w.WriteString("</div>\n")
 	}
@@ -130,5 +136,9 @@ func alertTypeOf(node ast.Node) (string, bool) {
 		return "", false
 	}
 	alertType, ok := value.(string)
+	if !ok {
+		return "", false
+	}
+	_, ok = alertLabel(alertType)
 	return alertType, ok
 }
