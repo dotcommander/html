@@ -50,8 +50,14 @@ require_contains "source help" "$source_help" "--version"
 
 source_version="$(cd "$repo_dir" && go run ./cmd/html --version)"
 installed_version="$("$path_bin" --version)"
-[[ "$source_version" == "$installed_version" ]] || fail "source and installed versions differ"
-[[ "$installed_version" == "html devel" ]] || fail "local installed version is $installed_version, want html devel"
+[[ "$source_version" == "html devel" ]] || fail "source version is $source_version, want html devel"
+
+expected_installed_version="html devel"
+exact_tag="$(git -C "$repo_dir" describe --tags --exact-match HEAD 2>/dev/null || true)"
+if [[ "$exact_tag" == v* ]] && [[ -z "$(git -C "$repo_dir" status --porcelain --untracked-files=no)" ]]; then
+  expected_installed_version="html $exact_tag"
+fi
+[[ "$installed_version" == "$expected_installed_version" ]] || fail "installed version is $installed_version, want $expected_installed_version"
 
 module_info="$(go version -m "$path_bin")"
 require_contains "PATH html module info" "$module_info" $'path\tgithub.com/dotcommander/html/cmd/html'
