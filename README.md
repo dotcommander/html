@@ -8,7 +8,7 @@
 
 ```bash
 # Immutable release (recommended)
-go install github.com/dotcommander/html/cmd/html@v0.1.0
+go install github.com/dotcommander/html/cmd/html@v0.2.0
 
 # Latest published release
 go install github.com/dotcommander/html/cmd/html@latest
