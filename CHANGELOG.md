@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixes
 
+- Match GitHub alert recognition boundaries for empty and nested blockquotes.
 - Verify both development and exact-tag versions of the installed CLI.
 
 ### Quality
