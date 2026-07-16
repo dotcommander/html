@@ -12,6 +12,10 @@ All notable changes to this project will be documented in this file.
 - Keep relative Markdown links working from trusted cached file renders.
 - Report stable, deduplicated warnings when local images cannot be embedded.
 
+### Fixes
+
+- Verify both development and exact-tag versions of the installed CLI.
+
 ### Quality
 
 - Add golden, metamorphic, browser, and GitHub Markdown conformance coverage.
