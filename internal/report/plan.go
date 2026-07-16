@@ -20,12 +20,23 @@ func Plan(ctx context.Context, src []byte, opts Options) (Analysis, ReportPlan) 
 	opts = withDefaults(opts)
 	analysis := Analyze(src, opts.SourceName)
 	base := deterministicPlan(analysis, opts)
+	if analysis.Kind == KindMarkdown && opts.Mode == ModeOverrideAuto && (opts.Layout == LayoutOverrideAuto || opts.Layout == LayoutOverrideSingle) {
+		if components := semanticMarkdownComponents(src); len(components) > 0 {
+			base.Components = components
+			if opts.Layout == LayoutOverrideAuto {
+				base.Layout = LayoutSinglePage
+			}
+			base.Reasons = append(base.Reasons, "explicit ordered action list promoted to source-backed timeline")
+		}
+	}
 	base.Planner = PlannerInfo{Name: "deterministic"}
 	base, err := ValidatePlan(base)
 	if err != nil {
 		base = fallbackPlan(analysis, opts, "deterministic plan invalid: "+err.Error())
 	}
-	if !shouldUseLLM(analysis, base, opts) {
+	// Phase one semantic sections are deterministic and source-owned. They are
+	// never offered to the LLM planner for selection or rewriting.
+	if hasSemanticComponents(base.Components) || !shouldUseLLM(analysis, base, opts) {
 		return analysis, base
 	}
 	llmPlan, reason := planWithLLM(ctx, src, analysis, base, opts)
@@ -70,6 +81,12 @@ func deterministicPlan(a Analysis, opts Options) ReportPlan {
 	layout := LayoutSinglePage
 	if len(components) > 2 || a.Kind == KindMixed {
 		layout = LayoutTabbedPage
+	}
+	// Chart mode keeps the visualization, its diagnostic fallback, and the
+	// source table visible in one document by default. An explicit --layout
+	// override below still wins.
+	if opts.Mode == ModeOverrideChart {
+		layout = LayoutSinglePage
 	}
 	switch opts.Layout {
 	case LayoutOverrideSingle:
@@ -149,6 +166,15 @@ func overrideComponents(mode ModeOverride, a Analysis) (Kind, Mode, []Component)
 			return componentsFor(a)
 		}
 		return a.Kind, ModeDataBrowser, []Component{{Type: ComponentRecordCards, Source: "records", Title: "Details", Options: map[string]string{"primary": "true"}}}
+	case ModeOverrideChart:
+		if !hasRecordRows(a.Kind) {
+			return componentsFor(a)
+		}
+		return a.Kind, ModeDataBrowser, []Component{
+			{Type: ComponentSummary, Source: "analysis", Title: "Summary", Options: map[string]string{}},
+			{Type: ComponentChart, Source: "records", Title: "Chart", Options: map[string]string{"type": "bar"}},
+			{Type: ComponentDataTable, Source: "records", Title: "Records", Options: map[string]string{"primary": "true"}},
+		}
 	case ModeOverrideReview:
 		if !hasRecordRows(a.Kind) {
 			return componentsFor(a)
@@ -177,7 +203,26 @@ func hasRecordRows(kind Kind) bool {
 	return kind == KindJSONRecords || kind == KindCSVRecords || kind == KindTSVRecords || kind == KindTableRecords
 }
 
+func hasSemanticComponents(components []Component) bool {
+	for _, component := range components {
+		if component.Article != nil || component.Timeline != nil {
+			return true
+		}
+	}
+	return false
+}
+
 func fallbackPlan(a Analysis, opts Options, reason string) ReportPlan {
+	if a.Kind == KindMarkdown {
+		p := ReportPlan{
+			Version: PlanVersion, Kind: a.Kind, Layout: LayoutSinglePage, Mode: ModeReader,
+			Components: []Component{{Type: ComponentArticle, Source: "input", Title: "Article", Options: map[string]string{}}},
+			Confidence: a.Confidence, Reasons: append(append([]string{}, a.Reasons...), reason),
+			Planner: PlannerInfo{Name: "deterministic"},
+		}
+		p, _ = ValidatePlan(p)
+		return p
+	}
 	p := ReportPlan{
 		Version:    PlanVersion,
 		Kind:       a.Kind,
@@ -321,6 +366,9 @@ func validatePlanForAnalysis(p ReportPlan, a Analysis) error {
 	if p.Kind != a.Kind {
 		return fmt.Errorf("plan kind %q is incompatible with analysis kind %q", p.Kind, a.Kind)
 	}
+	if hasSemanticComponents(p.Components) {
+		return fmt.Errorf("semantic components are deterministic-only")
+	}
 	for i, c := range p.Components {
 		if !componentAllowedForKind(a.Kind, c.Type) {
 			return fmt.Errorf("component %d type %q is incompatible with analysis kind %q", i, c.Type, a.Kind)
@@ -366,10 +414,10 @@ func llmUserPrompt(analysis Analysis, fallback ReportPlan, summary string, src [
 	return "Allowed kind: markdown, json-records, json-object, csv-records, tsv-records, table-records, diff, source-code, tree-listing, log, transcript, mixed, plain, binary.\n" +
 		"Allowed layout: single-page, tabbed-page, slides-page.\n" +
 		"Allowed mode: reader, data-browser, review, console, code, brief.\n" +
-		"Allowed component type: article, preformatted, code-block, data-table, record-cards, diff-view, file-tree, summary, raw-json.\n" +
+		"Allowed component type: article, preformatted, code-block, chart, data-table, record-cards, diff-view, file-tree, summary, raw-json.\n" +
 		"Allowed component source: input, analysis, records.\n" +
-		"Component source compatibility: summary uses analysis; data-table and record-cards use records; every other component uses input.\n" +
-		"Component compatibility: article only markdown; data-table and record-cards only json-records/csv-records/tsv-records/table-records; raw-json only json-object; diff-view only diff; file-tree only tree-listing; code-block, summary, and preformatted any kind.\n" +
+		"Component source compatibility: summary uses analysis; chart, data-table, and record-cards use records; every other component uses input.\n" +
+		"Component compatibility: article only markdown; chart, data-table, and record-cards only json-records/csv-records/tsv-records/table-records; raw-json only json-object; diff-view only diff; file-tree only tree-listing; code-block, summary, and preformatted any kind. Chart supports type=bar with optional categorical x and numeric y column names.\n" +
 		"Use version 1 and at least one component. Prefer the deterministic plan unless the input is genuinely mixed or ambiguous.\n" +
 		"Analysis summary: " + summary + "\n" +
 		"Deterministic plan: " + fallback.Digest() + "\n" +

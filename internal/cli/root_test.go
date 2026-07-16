@@ -47,6 +47,39 @@ func TestRoot_PipedPlainSmoke(t *testing.T) {
 	}
 }
 
+func TestRoot_PrintsImageDiagnosticsToStderr(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	source := filepath.Join(dir, "source.md")
+	if err := os.WriteFile(source, []byte("![missing](missing.png)\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if p, err := cache.PathFor(source); err == nil {
+			_ = os.Remove(p)
+			_ = os.Remove(strings.TrimSuffix(p, ".html") + ".fp")
+		}
+	})
+
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"-nf", source})
+	out := &bytes.Buffer{}
+	errOut := &bytes.Buffer{}
+	cmd.SetOut(out)
+	cmd.SetErr(errOut)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !strings.Contains(out.String(), ".html") {
+		t.Fatalf("expected cache path on stdout, got %q", out.String())
+	}
+	want := `html: warning: [image-missing] image "missing.png" was not embedded` + "\n"
+	if errOut.String() != want {
+		t.Fatalf("stderr = %q, want %q", errOut.String(), want)
+	}
+}
+
 func TestRoot_HelpExposesPlannerConfiguration(t *testing.T) {
 	t.Parallel()
 	cmd := newRootCmd()
@@ -58,6 +91,9 @@ func TestRoot_HelpExposesPlannerConfiguration(t *testing.T) {
 		t.Fatalf("Execute: %v", err)
 	}
 	got := out.String()
+	if !strings.Contains(got, "chart") {
+		t.Fatalf("help should expose chart report mode, got:\n%s", got)
+	}
 	if !strings.Contains(got, "--planner") {
 		t.Fatalf("help should still expose planner policy, got:\n%s", got)
 	}

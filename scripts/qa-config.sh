@@ -77,7 +77,8 @@ require_file_contains invalid-config "$err_file" 'default_palette must be'
 cp "$err_file" "${out_dir}/invalid-config.txt"
 
 require_file_contains readme-config "${repo_dir}/README.md" '"default_palette": "blue"'
-require_file_contains readme-config "${repo_dir}/README.md" '"sepia" | "blue" | "green" | "rose" | "catppuccin"'
+require_file_contains readme-config "${repo_dir}/README.md" 'palettes are `sepia`'
+require_file_contains readme-config "${repo_dir}/README.md" '`blue`, `green`, `rose`, or `catppuccin`'
 require_file_contains claude-config "${repo_dir}/CLAUDE.md" '"default_palette": "blue"'
 require_file_contains claude-config "${repo_dir}/CLAUDE.md" 'Output-affecting fields (`max_width`, `default_theme`, `default_palette`, `toc`)'
 

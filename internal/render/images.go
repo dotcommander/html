@@ -49,25 +49,47 @@ type imageInliner struct {
 	maxTotal int64
 }
 
+// ImageDiagnosticCode identifies why an image could not be embedded in the output.
+type ImageDiagnosticCode string
+
+const (
+	DiagnosticImageRemote      ImageDiagnosticCode = "image-remote"
+	DiagnosticImageMissing     ImageDiagnosticCode = "image-missing"
+	DiagnosticImageUnsupported ImageDiagnosticCode = "image-unsupported"
+	DiagnosticImageUnreadable  ImageDiagnosticCode = "image-unreadable"
+	DiagnosticImageOversized   ImageDiagnosticCode = "image-oversized"
+	DiagnosticImageOverBudget  ImageDiagnosticCode = "image-over-budget"
+)
+
+// ImageDiagnostic reports a degraded self-containment condition. Destination is
+// the original Markdown image destination, before URL decoding or path cleanup.
+type ImageDiagnostic struct {
+	Code        ImageDiagnosticCode
+	Destination string
+}
+
 type inlineImageResult struct {
-	uri  string
-	size int64
-	ok   bool
+	uri        string
+	size       int64
+	ok         bool
+	diagnostic ImageDiagnosticCode
 }
 
 type imageInlinerState struct {
-	used int64
-	memo map[string]inlineImageResult
+	used        int64
+	memo        map[string]inlineImageResult
+	diagnostics []ImageDiagnostic
+	seen        map[string]struct{}
 }
 
 func (t imageInliner) Transform(doc *ast.Document, _ text.Reader, pc parser.Context) {
 	baseDir, _ := pc.Get(baseDirKey).(string)
-	if baseDir == "" {
-		return
-	}
 	state, _ := pc.Get(imageInlinerStateKey).(*imageInlinerState)
 	if state == nil {
-		state = &imageInlinerState{memo: make(map[string]inlineImageResult)}
+		state = &imageInlinerState{
+			memo: make(map[string]inlineImageResult),
+			seen: make(map[string]struct{}),
+		}
 		pc.Set(imageInlinerStateKey, state)
 	}
 	limit := t.maxTotal
@@ -82,8 +104,14 @@ func (t imageInliner) Transform(doc *ast.Document, _ text.Reader, pc parser.Cont
 		if !ok {
 			return ast.WalkContinue, nil
 		}
-		result := state.load(baseDir, string(img.Destination))
-		if !result.ok || result.size > limit-state.used {
+		dest := string(img.Destination)
+		result := state.load(baseDir, dest)
+		if !result.ok {
+			state.addDiagnostic(dest, result.diagnostic)
+			return ast.WalkContinue, nil
+		}
+		if result.size > limit-state.used {
+			state.addDiagnostic(dest, DiagnosticImageOverBudget)
 			return ast.WalkContinue, nil
 		}
 		state.used += result.size
@@ -92,9 +120,26 @@ func (t imageInliner) Transform(doc *ast.Document, _ text.Reader, pc parser.Cont
 	})
 }
 
+func (s *imageInlinerState) addDiagnostic(dest string, code ImageDiagnosticCode) {
+	if code == "" {
+		return
+	}
+	key := string(code) + "\x00" + dest
+	if _, ok := s.seen[key]; ok {
+		return
+	}
+	s.seen[key] = struct{}{}
+	s.diagnostics = append(s.diagnostics, ImageDiagnostic{Code: code, Destination: dest})
+}
+
 func (s *imageInlinerState) load(baseDir, dest string) inlineImageResult {
-	path, mime, ok := inlineImagePath(baseDir, dest)
+	path, mime, diagnostic, ok := classifyInlineImagePath(baseDir, dest)
 	if !ok {
+		return inlineImageResult{diagnostic: diagnostic}
+	}
+	// With no source directory, local paths intentionally remain untouched: the
+	// caller has not established which directory owns relative image resolution.
+	if baseDir == "" {
 		return inlineImageResult{}
 	}
 	if result, ok := s.memo[path]; ok {
@@ -118,9 +163,19 @@ func inlineImage(baseDir, dest string) (string, bool) {
 }
 
 func inlineImagePath(baseDir, dest string) (string, string, bool) {
-	if dest == "" || strings.HasPrefix(dest, "data:") ||
-		strings.HasPrefix(dest, "//") || strings.Contains(dest, "://") {
-		return "", "", false
+	path, mime, _, ok := classifyInlineImagePath(baseDir, dest)
+	return path, mime, ok
+}
+
+func classifyInlineImagePath(baseDir, dest string) (string, string, ImageDiagnosticCode, bool) {
+	if strings.HasPrefix(dest, "data:") {
+		return "", "", "", false
+	}
+	if strings.HasPrefix(dest, "//") || strings.Contains(dest, "://") {
+		return "", "", DiagnosticImageRemote, false
+	}
+	if dest == "" {
+		return "", "", DiagnosticImageUnsupported, false
 	}
 	// Drop any #fragment / ?query before touching the filesystem.
 	clean := dest
@@ -128,12 +183,12 @@ func inlineImagePath(baseDir, dest string) (string, string, bool) {
 		clean = clean[:i]
 	}
 	if clean == "" {
-		return "", "", false
+		return "", "", DiagnosticImageUnsupported, false
 	}
 	clean = imageFilesystemPath(clean)
 	mime, ok := mimeByExt[strings.ToLower(filepath.Ext(clean))]
 	if !ok {
-		return "", "", false
+		return "", "", DiagnosticImageUnsupported, false
 	}
 	p := clean
 	if !filepath.IsAbs(p) {
@@ -143,22 +198,32 @@ func inlineImagePath(baseDir, dest string) (string, string, bool) {
 	if err == nil {
 		p = abs
 	}
-	return p, mime, true
+	return p, mime, "", true
 }
 
 func readInlineImage(path, mime string) inlineImageResult {
 	f, err := os.Open(path)
 	if err != nil {
-		return inlineImageResult{}
+		code := DiagnosticImageUnreadable
+		if os.IsNotExist(err) {
+			code = DiagnosticImageMissing
+		}
+		return inlineImageResult{diagnostic: code}
 	}
 	defer f.Close()
 	info, err := f.Stat()
-	if err != nil || info.IsDir() || info.Size() > maxInlineImage {
-		return inlineImageResult{}
+	if err != nil || info.IsDir() {
+		return inlineImageResult{diagnostic: DiagnosticImageUnreadable}
+	}
+	if info.Size() > maxInlineImage {
+		return inlineImageResult{diagnostic: DiagnosticImageOversized}
 	}
 	b, err := io.ReadAll(io.LimitReader(f, maxInlineImage+1))
 	if err != nil || len(b) > maxInlineImage {
-		return inlineImageResult{}
+		if len(b) > maxInlineImage {
+			return inlineImageResult{diagnostic: DiagnosticImageOversized}
+		}
+		return inlineImageResult{diagnostic: DiagnosticImageUnreadable}
 	}
 	uri := "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(b)
 	return inlineImageResult{

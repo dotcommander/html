@@ -40,6 +40,9 @@ Generated CSS and JavaScript are always embedded. In trusted Markdown mode,
 supported local images up to 10 MiB each are embedded until the document reaches
 the 32 MiB image budget; remote, missing, unsupported, oversized, and over-budget
 images remain external references. Repeated references count toward the budget.
+For trusted Markdown files, the CLI reports each distinct non-embedded image on
+stderr with a stable reason code, without changing the rendered document or
+cache path written to stdout.
 Plain text and stdin have no local-image base directory.
 
 ## Common flags
@@ -65,9 +68,23 @@ Piped input is auto-classified. A high-confidence structural signal — a fenced
 
 Files are decided by extension: `.md` / `.markdown` → Markdown, everything else → plain.
 
+GitHub-style alerts render as themed callouts in trusted and safe Markdown:
+
+```markdown
+> [!WARNING]
+> Back up the destination before replacing it.
+```
+
+The supported alert types are `NOTE`, `TIP`, `IMPORTANT`, `WARNING`, and
+`CAUTION`.
+
 ## Output & caching
 
 Rendered pages are cached under `~/.config/html/cache/` and reused until the source changes. Use `-f` to force a re-render, or `-o <path>` to write the HTML somewhere stable to share or attach.
+
+For trusted cached file renders, relative Markdown links are resolved against the
+source document and emitted as absolute `file:` URLs. Explicit `-o`/stdout
+output and `--safe` mode preserve links as written.
 
 Cache validity includes the source bytes, not only modification times. Cache
 directories are private to the current user. Stable outputs are written
@@ -90,6 +107,16 @@ html data.json --plan --planner llm \
   --llm-model example-model --llm-timeout 10s
 ```
 
+For two-column record data with one category column and one finite numeric
+column, `--mode chart` renders a bounded, accessible horizontal bar chart and
+keeps the full data table alongside it. Inputs with more than 1,000 rows or 24
+visible categories get an inline chart diagnostic while the summary and table
+remain available.
+
+In automatic report mode, an H2 or H3 section whose complete body is an ordered
+list becomes a timeline. The planner preserves all other Markdown as article
+content and validates that the components still own the original source bytes.
+
 ## Browser QA
 
 Run the generated browser QA suite with:
@@ -101,6 +128,13 @@ just qa-browser
 The suite regenerates `.work/html-qa/`, uses the source-owned chromedp helper at
 `tools/chromedp-capture`, captures desktop/mobile PNGs, checks console errors and
 overflow, and writes JSON metrics under `.work/html-qa/browser/`.
+
+To compare supported Markdown fixtures with GitHub's rendering API, run the
+opt-in network check while authenticated with `gh`:
+
+```bash
+just qa-github-markdown
+```
 
 ## Configuration (optional)
 
@@ -119,7 +153,7 @@ overflow, and writes JSON metrics under `.work/html-qa/browser/`.
 
 `open_command` defaults to the platform launcher. `max_width` accepts a CSS
 length. Theme values are `light`, `dark`, or `auto`; palettes are `sepia`,
-`"sepia" | "blue" | "green" | "rose" | "catppuccin"`;
+`blue`, `green`, `rose`, or `catppuccin`;
 `default_code_theme` is a Chroma style.
 Omit `toc` to retain automatic table-of-contents selection.
 

@@ -1,0 +1,39 @@
+bytes=71403
+sha256=e2e12e541239f99af45f1726e34bf65093bd871f5fb5037386067e23d12158df
+--- article ---
+<article class="markdown-body">
+<h1 id="render-contract">Render Contract</h1>
+<nav class="toc" aria-label="Table of contents">
+<ul>
+<li class="toc-h2"><a href="#overview">Overview</a></li>
+<li class="toc-h2"><a href="#data">Data</a></li>
+</ul>
+</nav>
+<h2 id="overview">Overview</h2>
+<p>Portable output with <strong>strong text</strong>, <code>inline code</code>, and a <a href="https://example.com">link</a>.</p>
+<ul>
+<li><input checked="" disabled="" type="checkbox"> deterministic</li>
+<li><input disabled="" type="checkbox"> reviewable</li>
+</ul>
+<h2 id="data">Data</h2>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">Name</th>
+<th style="text-align:right">Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">alpha</td>
+<td style="text-align:right">1</td>
+</tr>
+<tr>
+<td style="text-align:left">beta</td>
+<td style="text-align:right">22</td>
+</tr>
+</tbody>
+</table>
+<pre class="chroma light"><code><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;stable&#34;</span><span class="p">)</span><span class="w">
+</span></span></span></code></pre>
+  </article>

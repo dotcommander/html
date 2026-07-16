@@ -2,12 +2,14 @@ package actions
 
 import (
 	"encoding/base64"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/dotcommander/html/internal/cache"
+	"github.com/dotcommander/html/internal/render"
 	"github.com/dotcommander/html/internal/report"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -41,6 +43,141 @@ func TestRun_NoOpen(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, strings.Contains(string(data), "<!DOCTYPE html>"),
 		"expected rendered HTML in cache file")
+}
+
+func TestRun_CachedFileRebasesRelativeLinks(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	src := filepath.Join(dir, "doc.md")
+	require.NoError(t, os.WriteFile(src, []byte("[next](next%20page.md?raw=1#details)\n"), 0o644))
+	t.Cleanup(func() {
+		p, err := cache.PathFor(src)
+		if err == nil {
+			_ = os.Remove(p)
+			_ = os.Remove(strings.TrimSuffix(p, ".html") + ".fp")
+		}
+	})
+
+	path, err := Run(Options{File: src, NoOpen: true, Force: true})
+	require.NoError(t, err)
+	html := readRenderedFile(t, path)
+	want := (&url.URL{
+		Scheme:   "file",
+		Path:     filepath.ToSlash(filepath.Join(dir, "next page.md")),
+		RawQuery: "raw=1",
+		Fragment: "details",
+	}).String()
+	assert.Contains(t, html, `href="`+want+`"`)
+}
+
+func TestRun_ExplicitOutputKeepsRelativeLinks(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	src := filepath.Join(dir, "doc.md")
+	out := filepath.Join(dir, "out.html")
+	require.NoError(t, os.WriteFile(src, []byte("[next](next.md#details)\n"), 0o644))
+
+	_, err := RunWithResult(Options{File: src, Output: out, NoOpen: true})
+	require.NoError(t, err)
+	assert.Contains(t, readRenderedFile(t, out), `href="next.md#details"`)
+
+	fileStdout, err := RunWithResult(Options{File: src, Stdout: true, NoOpen: true})
+	require.NoError(t, err)
+	assert.Contains(t, fileStdout.Stdout, `href="next.md#details"`)
+
+	stdinStdout, err := RunWithResult(Options{
+		Stdin:    strings.NewReader("[next](next.md#details)\n"),
+		Markdown: true,
+		Stdout:   true,
+		NoOpen:   true,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, stdinStdout.Stdout, `href="next.md#details"`)
+}
+
+func TestRun_SafeCachedFileKeepsRelativeLinks(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	src := filepath.Join(dir, "doc.md")
+	require.NoError(t, os.WriteFile(src, []byte("[next](next.md#details)\n"), 0o644))
+	t.Cleanup(func() {
+		p, err := cache.PathFor(src)
+		if err == nil {
+			_ = os.Remove(p)
+			_ = os.Remove(strings.TrimSuffix(p, ".html") + ".fp")
+		}
+	})
+
+	path, err := Run(Options{File: src, Safe: true, NoOpen: true, Force: true})
+	require.NoError(t, err)
+	assert.Contains(t, readRenderedFile(t, path), `href="next.md#details"`)
+}
+
+func TestRun_CachedFileLinkBaseInvalidatesAcrossSymlinkAliases(t *testing.T) {
+	t.Parallel()
+
+	realDir := t.TempDir()
+	source := filepath.Join(realDir, "doc.md")
+	require.NoError(t, os.WriteFile(source, []byte("[next](next.md)\n"), 0o644))
+
+	aliasDir := t.TempDir()
+	alias := filepath.Join(aliasDir, "doc.md")
+	if err := os.Symlink(source, alias); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	t.Cleanup(func() {
+		p, err := cache.PathFor(source)
+		if err == nil {
+			_ = os.Remove(p)
+			_ = os.Remove(strings.TrimSuffix(p, ".html") + ".fp")
+		}
+	})
+
+	aliasCache, err := Run(Options{File: alias, NoOpen: true, Force: true})
+	require.NoError(t, err)
+	aliasURL := (&url.URL{Scheme: "file", Path: filepath.ToSlash(filepath.Join(aliasDir, "next.md"))}).String()
+	assert.Contains(t, readRenderedFile(t, aliasCache), `href="`+aliasURL+`"`)
+
+	realCache, err := Run(Options{File: source, NoOpen: true})
+	require.NoError(t, err)
+	require.Equal(t, aliasCache, realCache, "symlink aliases deliberately share one cache path")
+	realURL := (&url.URL{Scheme: "file", Path: filepath.ToSlash(filepath.Join(realDir, "next.md"))}).String()
+	realHTML := readRenderedFile(t, realCache)
+	assert.Contains(t, realHTML, `href="`+realURL+`"`)
+	assert.NotContains(t, realHTML, `href="`+aliasURL+`"`)
+}
+
+func TestRun_CachedReportRebasesRelativeLinks(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	src := filepath.Join(dir, "doc.md")
+	require.NoError(t, os.WriteFile(src, []byte("# Report\n\n[next](next.md#details)\n"), 0o644))
+	t.Cleanup(func() {
+		p, err := cache.PathFor(src)
+		if err == nil {
+			_ = os.Remove(p)
+			_ = os.Remove(strings.TrimSuffix(p, ".html") + ".fp")
+		}
+	})
+
+	res, err := RunWithResult(Options{
+		File:    src,
+		Report:  true,
+		Planner: report.PlannerOff,
+		NoOpen:  true,
+		Force:   true,
+	})
+	require.NoError(t, err)
+	want := (&url.URL{
+		Scheme:   "file",
+		Path:     filepath.ToSlash(filepath.Join(dir, "next.md")),
+		Fragment: "details",
+	}).String()
+	assert.Contains(t, readRenderedFile(t, res.Path), `href="`+want+`"`)
 }
 
 func TestRun_OutputIncludesConfiguredPalette(t *testing.T) {
@@ -82,6 +219,52 @@ func TestRun_OutputIncludesConfiguredCodeTheme(t *testing.T) {
 	html := readRenderedFile(t, out)
 	assert.Contains(t, html, `class="chroma`)
 	assert.Contains(t, html, "#282a36")
+}
+
+func TestRun_ThreadsImageDiagnosticsOnRenderAndCacheHit(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	source := filepath.Join(dir, "source.md")
+	require.NoError(t, os.WriteFile(source, []byte("![missing](missing.png)\n"), 0o644))
+	t.Cleanup(func() {
+		if p, err := cache.PathFor(source); err == nil {
+			_ = os.Remove(p)
+			_ = os.Remove(strings.TrimSuffix(p, ".html") + ".fp")
+		}
+	})
+
+	for _, force := range []bool{true, false} {
+		res, err := RunWithResult(Options{File: source, NoOpen: true, Force: force})
+		require.NoError(t, err)
+		require.NotEmpty(t, res.Path)
+		assert.Equal(t, []render.ImageDiagnostic{{
+			Code:        render.DiagnosticImageMissing,
+			Destination: "missing.png",
+		}}, res.Diagnostics)
+	}
+}
+
+func TestRun_ThreadsImageDiagnosticsForTimelineOnlyReport(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	source := filepath.Join(dir, "timeline.md")
+	src := "## Steps\n\n1. Review ![missing](missing.png).\n2. Publish.\n"
+	require.NoError(t, os.WriteFile(source, []byte(src), 0o644))
+	t.Cleanup(func() {
+		if p, err := cache.PathFor(source); err == nil {
+			_ = os.Remove(p)
+			_ = os.Remove(strings.TrimSuffix(p, ".html") + ".fp")
+		}
+	})
+
+	res, err := RunWithResult(Options{File: source, Report: true, NoOpen: true, Force: true})
+	require.NoError(t, err)
+	assert.Equal(t, []render.ImageDiagnostic{{
+		Code:        render.DiagnosticImageMissing,
+		Destination: "missing.png",
+	}}, res.Diagnostics)
 }
 
 func TestRun_RejectsOutputAliasesSource(t *testing.T) {

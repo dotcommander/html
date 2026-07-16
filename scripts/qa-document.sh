@@ -105,6 +105,9 @@ Normal Markdown output with tables, tasks, quotes, code, and local images.
 
 > Local images should survive as inlined data URIs.
 
+> [!NOTE]
+> GitHub-style alerts should render as themed callouts.
+
 ```go
 fmt.Println("document")
 ```
@@ -190,6 +193,8 @@ require_file_contains markdown "${out_dir}/markdown.html" '<h1 id="document-mode
 require_file_contains markdown "${out_dir}/markdown.html" '<table>'
 require_file_contains markdown "${out_dir}/markdown.html" 'type="checkbox"'
 require_file_contains markdown "${out_dir}/markdown.html" '<blockquote>'
+require_file_contains markdown "${out_dir}/markdown.html" 'class="markdown-alert markdown-alert-note"'
+require_file_contains markdown "${out_dir}/markdown.html" 'class="markdown-alert-title">Note</p>'
 require_file_contains markdown "${out_dir}/markdown.html" 'class="chroma light"'
 require_file_contains markdown "${out_dir}/markdown.html" 'data:image/png;base64,'
 require_file_contains markdown "${out_dir}/markdown.html" 'data:image/svg+xml;base64,'
@@ -336,7 +341,7 @@ EOF_INDEX
 
 for file in markdown output-dash forced-markdown safe plain plain-csv-table plain-column-table plain-skill-leaderboards code stdout-plain-table stdout-plain-go ansi frame stdin-markdown; do
   case "$file" in
-    markdown) note="Markdown document with table, tasks, quote, code, PNG, and SVG inlined as data URIs." ;;
+    markdown) note="Markdown document with table, tasks, quote, alert, code, PNG, and SVG inlined as data URIs." ;;
     output-dash) note="The public -o - path writes the final document HTML to stdout without leaking a cache path." ;;
     forced-markdown) note="Forced Markdown renders weak inline cues that auto-detection intentionally leaves plain." ;;
     safe) note="Safe mode removes raw script HTML while preserving ordinary Markdown formatting." ;;

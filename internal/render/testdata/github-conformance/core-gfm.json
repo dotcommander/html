@@ -1,0 +1,17 @@
+{
+  "github": {
+    "blockquotes": 1,
+    "tables": 1,
+    "task_items": 2,
+    "strikethroughs": 1,
+    "headings": 1
+  },
+  "local": {
+    "blockquotes": 1,
+    "tables": 1,
+    "task_items": 2,
+    "strikethroughs": 1,
+    "headings": 1
+  },
+  "known_deltas": []
+}

@@ -103,6 +103,10 @@ func wrapPage(title, body string, opts Options) string {
 		frameStyle = "\n" + frameCSS()
 		content = terminalFrame(title, body)
 	}
+	alertStyle := ""
+	if strings.Contains(body, `class="markdown-alert `) {
+		alertStyle = "\n" + alertCSS()
+	}
 
 	var w strings.Builder
 	fmt.Fprintf(&w, `<!DOCTYPE html>
@@ -116,7 +120,7 @@ func wrapPage(title, body string, opts Options) string {
   <title>%s</title>
   <style>
 %s
-%s%s%s
+%s%s%s%s
   </style>
 </head>
 <body>
@@ -144,7 +148,7 @@ func wrapPage(title, body string, opts Options) string {
   </script>
 </body>
 </html>
-`, themeDefault+paletteDefault, themeJS(), title, baseCSS(), highlightCSS(opts.CodeTheme), widthOverride, frameStyle, content, copyJS(), headingsJS(), reportJS())
+`, themeDefault+paletteDefault, themeJS(), title, baseCSS(), highlightCSS(opts.CodeTheme), widthOverride, frameStyle, alertStyle, content, copyJS(), headingsJS(), reportJS())
 	return w.String()
 }
 

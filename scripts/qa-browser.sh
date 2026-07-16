@@ -4,7 +4,9 @@ set -euo pipefail
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 capture_dir="${repo_dir}/tools/chromedp-capture"
 out_dir="${repo_dir}/.work/html-qa/browser"
-metric_file="$(mktemp "${TMPDIR:-/tmp}/html-qa-browser.XXXXXX.json")"
+# BSD mktemp requires the X run at the end of the template. Keeping a suffix
+# after it creates a literal reusable filename and makes the second QA run fail.
+metric_file="$(mktemp "${TMPDIR:-/tmp}/html-qa-browser.XXXXXX")"
 trap 'rm -f "$metric_file"' EXIT
 
 fail() {
@@ -443,7 +445,7 @@ capture document "$document_url" 390 900
 require_json_file document "${out_dir}/document-390x900.json" '.iframe_count == 14 and .iframe_loaded_frames == 14 and .error_contracts == 8'
 
 capture document-markdown "$document_markdown_url" 390 900 --palette green
-require_json_file document-markdown "${out_dir}/document-markdown-390x900.json" '.theme_controls_one_row == true and .palette == "green" and .accent == "#2d7a46" and .copy_buttons >= 1 and .heading_anchors >= 1 and .task_checkboxes == 2 and .blockquotes == 1 and .image_count == 2 and .loaded_images == 2 and .data_uri_images == 2 and .svg_images == 1 and .raster_images == 1'
+require_json_file document-markdown "${out_dir}/document-markdown-390x900.json" '.theme_controls_one_row == true and .palette == "green" and .accent == "#2d7a46" and .copy_buttons >= 1 and .heading_anchors >= 1 and .task_checkboxes == 2 and .blockquotes == 1 and .component_counts.markdown_alert == 1 and .image_count == 2 and .loaded_images == 2 and .data_uri_images == 2 and .svg_images == 1 and .raster_images == 1'
 
 capture document-output-dash "$document_output_dash_url" 390 900
 require_json_file document-output-dash "${out_dir}/document-output-dash-390x900.json" '.theme_controls_one_row == true and .title == "Document Mode" and .copy_buttons >= 1 and .heading_anchors >= 1 and .image_count == 2 and .loaded_images == 2 and .data_uri_images == 2'

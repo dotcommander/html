@@ -51,5 +51,9 @@ qa-dashboard:
 qa-browser:
     scripts/qa-browser.sh
 
+# Opt-in network QA: requires gh authentication and calls GitHub's /markdown API.
+qa-github-markdown:
+    go run ./scripts/qa-github-markdown.go
+
 force file="CLAUDE.md": build
     ./html -n -f {{file}}

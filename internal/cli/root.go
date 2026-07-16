@@ -65,7 +65,7 @@ func (cmd *command) Execute() error {
 	fs.BoolVar(&plan, "plan", false, "print the report plan JSON without rendering")
 	fs.BoolVar(&stdout, "stdout", false, "write the final HTML document to stdout without opening")
 	fs.BoolVar(&version, "version", false, "print version and exit")
-	fs.Var((*modeValue)(&mode), "mode", "report mode: auto, article, table, cards, review, diff, log, code, tree")
+	fs.Var((*modeValue)(&mode), "mode", "report mode: auto, article, table, cards, chart, review, diff, log, code, tree")
 	fs.Var((*layoutValue)(&layout), "layout", "report layout: auto, single, tabs, slides, review")
 	fs.Var((*plannerValue)(&planner), "planner", "planner policy: off, auto, llm")
 	fs.StringVar(&llmURL, "llm-url", reportDefaults.LLMURL, "HTTP(S) OpenAI-compatible chat completions endpoint")
@@ -179,6 +179,9 @@ func (cmd *command) Execute() error {
 	}
 
 	res, err := actions.RunWithResult(opts)
+	for _, diagnostic := range res.Diagnostics {
+		fmt.Fprintf(cmd.errOut, "html: warning: [%s] image %q was not embedded\n", diagnostic.Code, diagnostic.Destination)
+	}
 	if res.Stdout != "" {
 		fmt.Fprint(cmd.out, res.Stdout)
 	} else if res.Path != "" {
@@ -317,7 +320,7 @@ func (v *modeValue) Type() string   { return "mode" }
 func (v *modeValue) Set(s string) error {
 	m := report.ModeOverride(s)
 	switch m {
-	case report.ModeOverrideAuto, report.ModeOverrideArticle, report.ModeOverrideTable, report.ModeOverrideCards, report.ModeOverrideReview, report.ModeOverrideDiff, report.ModeOverrideLog, report.ModeOverrideCode, report.ModeOverrideTree:
+	case report.ModeOverrideAuto, report.ModeOverrideArticle, report.ModeOverrideTable, report.ModeOverrideCards, report.ModeOverrideChart, report.ModeOverrideReview, report.ModeOverrideDiff, report.ModeOverrideLog, report.ModeOverrideCode, report.ModeOverrideTree:
 		*v = modeValue(m)
 		return nil
 	default:

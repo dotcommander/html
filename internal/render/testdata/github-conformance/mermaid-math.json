@@ -1,0 +1,11 @@
+{
+  "github": {
+    "mermaid_blocks": 1,
+    "math_renderers": 2,
+    "headings": 1
+  },
+  "local": {
+    "headings": 1
+  },
+  "known_deltas": ["mermaid_blocks", "math_renderers"]
+}

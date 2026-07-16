@@ -1,0 +1,11 @@
+{
+  "github": {
+    "alert_types": ["caution", "important", "note", "tip", "warning"],
+    "headings": 1
+  },
+  "local": {
+    "alert_types": ["caution", "important", "note", "tip", "warning"],
+    "headings": 1
+  },
+  "known_deltas": []
+}

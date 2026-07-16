@@ -857,6 +857,54 @@ func TestPlan_TableOverrideRequiresRecordRows(t *testing.T) {
 	}
 }
 
+func TestPlan_ChartOverrideAddsChartAndTableForRecords(t *testing.T) {
+	t.Parallel()
+
+	_, p := Plan(t.Context(), []byte("name,score\nAlpha,10\nBeta,2\n"), Options{SourceName: "scores.csv", Mode: ModeOverrideChart, Planner: PlannerOff})
+
+	if p.Kind != KindCSVRecords || p.Mode != ModeDataBrowser || p.Layout != LayoutSinglePage {
+		t.Fatalf("plan = kind %s mode %s layout %s, want csv-records data-browser single-page", p.Kind, p.Mode, p.Layout)
+	}
+	want := []ComponentType{ComponentSummary, ComponentChart, ComponentDataTable}
+	if len(p.Components) != len(want) {
+		t.Fatalf("components = %#v, want %v", p.Components, want)
+	}
+	for i, typ := range want {
+		if p.Components[i].Type != typ {
+			t.Fatalf("component %d = %s, want %s", i, p.Components[i].Type, typ)
+		}
+	}
+	if p.Components[1].Source != "records" || p.Components[1].Options["type"] != "bar" {
+		t.Fatalf("chart component = %#v, want records-backed bar chart", p.Components[1])
+	}
+}
+
+func TestPlan_ChartOverrideRequiresRecordRows(t *testing.T) {
+	t.Parallel()
+
+	_, p := Plan(t.Context(), []byte("plain text\n"), Options{Mode: ModeOverrideChart, Planner: PlannerOff})
+
+	if len(p.Components) != 2 || p.Components[0].Type != ComponentSummary || p.Components[1].Type != ComponentPreformatted {
+		t.Fatalf("components = %#v, want normal plain fallback", p.Components)
+	}
+}
+
+func TestValidatePlanAcceptsRecordsChart(t *testing.T) {
+	t.Parallel()
+
+	p := ReportPlan{
+		Version: PlanVersion, Kind: KindCSVRecords, Layout: LayoutSinglePage, Mode: ModeDataBrowser, Confidence: 1,
+		Components: []Component{{Type: ComponentChart, Source: "records", Title: "Chart", Options: map[string]string{"type": "bar", "x": "name", "y": "score"}}},
+	}
+	if _, err := ValidatePlan(p); err != nil {
+		t.Fatalf("ValidatePlan: %v", err)
+	}
+	p.Components[0].Source = "input"
+	if _, err := ValidatePlan(p); err == nil {
+		t.Fatal("expected chart input source to be rejected")
+	}
+}
+
 func TestPlan_BinaryUsesSummaryAndSafePreviewComponent(t *testing.T) {
 	t.Parallel()
 

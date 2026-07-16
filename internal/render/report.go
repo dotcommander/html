@@ -14,12 +14,21 @@ import (
 	"strings"
 
 	"github.com/dotcommander/html/internal/report"
+	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/text"
 )
 
 var utf8BOM = []byte{0xef, 0xbb, 0xbf}
 
 func RenderReport(src []byte, opts Options, analysis report.Analysis, plan report.ReportPlan) (string, error) {
+	if err := report.ValidateComponentSources(src, plan.Components); err != nil {
+		// Semantic plans are cacheable, so their byte ranges can become stale.
+		// Preserve the established article renderer instead of rendering the
+		// wrong bytes or surfacing a partial report.
+		plan.Layout = report.LayoutSinglePage
+		plan.Components = []report.Component{{Type: report.ComponentArticle, Source: "input", Title: "Article", Options: map[string]string{}}}
+	}
 	title := reportTitle(src, opts, analysis)
 	body, err := renderReportBody(src, opts, analysis, plan)
 	if err != nil {
@@ -42,6 +51,10 @@ func reportTitle(src []byte, opts Options, analysis report.Analysis) string {
 }
 
 func renderReportBody(src []byte, opts Options, analysis report.Analysis, plan report.ReportPlan) (string, error) {
+	if refs := semanticTimelineLists(plan.Components); len(refs) > 0 {
+		opts.semanticLists = refs
+		return articleView(src, opts)
+	}
 	switch plan.Layout {
 	case report.LayoutTabbedPage:
 		return renderTabs(src, opts, analysis, plan.Components)
@@ -252,6 +265,8 @@ func renderReportComponent(src []byte, opts Options, analysis report.Analysis, c
 			return "", err
 		}
 		return article, nil
+	case report.ComponentTimeline:
+		return "", fmt.Errorf("timeline component requires full-document semantic rendering")
 	case report.ComponentPreformatted:
 		if analysis.Kind == report.KindBinary {
 			return `<section class="report-section"><h2>` + title + `</h2>` + binaryView(src, analysis) + `</section>`, nil
@@ -267,6 +282,8 @@ func renderReportComponent(src []byte, opts Options, analysis report.Analysis, c
 		return `<section class="report-section"><h2>` + title + `</h2>` + codeView(src, opts, analysis) + `</section>`, nil
 	case report.ComponentDataTable:
 		return `<section class="report-section"><h2>` + title + `</h2>` + dataTable(src, analysis) + `</section>`, nil
+	case report.ComponentChart:
+		return `<section class="report-section"><h2>` + title + `</h2>` + chartView(src, analysis, c.Options) + `</section>`, nil
 	case report.ComponentRecordCards:
 		return `<section class="report-section"><h2>` + title + `</h2>` + recordCards(src, analysis) + `</section>`, nil
 	case report.ComponentReview:
@@ -282,6 +299,49 @@ func renderReportComponent(src []byte, opts Options, analysis report.Analysis, c
 	default:
 		return `<section class="report-section"><h2>` + title + `</h2>` + rawPre(src) + `</section>`, nil
 	}
+}
+
+func semanticTimelineLists(components []report.Component) []report.SourceRef {
+	var refs []report.SourceRef
+	for _, component := range components {
+		if component.Timeline != nil {
+			refs = append(refs, component.Timeline.List)
+		}
+	}
+	return refs
+}
+
+type semanticListTransformer struct {
+	refs []report.SourceRef
+}
+
+func (transformer semanticListTransformer) Transform(doc *ast.Document, reader text.Reader, _ parser.Context) {
+	src := reader.Source()
+	wanted := make(map[[2]int]struct{}, len(transformer.refs))
+	for _, ref := range transformer.refs {
+		wanted[[2]int{ref.Start, ref.End}] = struct{}{}
+	}
+	_ = ast.Walk(doc, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		list, ok := node.(*ast.List)
+		if !ok || !list.IsOrdered() {
+			return ast.WalkContinue, nil
+		}
+		start, end, ok := report.SourceRangeForNode(list, src)
+		if !ok {
+			return ast.WalkContinue, nil
+		}
+		if _, ok := wanted[[2]int{start, end}]; !ok {
+			return ast.WalkContinue, nil
+		}
+		list.SetAttributeString("class", []byte("report-timeline-list"))
+		for item := list.FirstChild(); item != nil; item = item.NextSibling() {
+			item.SetAttributeString("class", []byte("report-timeline-item"))
+		}
+		return ast.WalkSkipChildren, nil
+	})
 }
 
 func rawPre(src []byte) string {

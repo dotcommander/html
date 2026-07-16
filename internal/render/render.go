@@ -8,6 +8,7 @@ import (
 
 	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
 	"github.com/alecthomas/chroma/v2/styles"
+	"github.com/dotcommander/html/internal/report"
 	"github.com/yuin/goldmark"
 	highlighting "github.com/yuin/goldmark-highlighting/v2"
 	"github.com/yuin/goldmark/ast"
@@ -29,7 +30,7 @@ func newMarkdown(unsafe bool, codeTheme string) goldmark.Markdown {
 	return newMarkdownWithImageLimit(unsafe, codeTheme, maxInlineImages)
 }
 
-func newMarkdownWithImageLimit(unsafe bool, codeTheme string, imageLimit int64) goldmark.Markdown {
+func newMarkdownWithImageLimit(unsafe bool, codeTheme string, imageLimit int64, extraTransformers ...parser.ASTTransformer) goldmark.Markdown {
 	highlightOpts := []highlighting.Option{
 		// WithClasses emits CSS class names (e.g. .chroma .k) rather than
 		// inline styles, so highlightCSS controls colors and dark mode works.
@@ -46,14 +47,22 @@ func newMarkdownWithImageLimit(unsafe bool, codeTheme string, imageLimit int64) 
 	if !unsafe {
 		imageTransformer = safeImagePlaceholder{}
 	}
+	transformers := []util.PrioritizedValue{
+		util.Prioritized(imageTransformer, 100),
+		util.Prioritized(localLinkRebaser{}, 110),
+	}
+	for i, transformer := range extraTransformers {
+		transformers = append(transformers, util.Prioritized(transformer, 200+i))
+	}
 	opts := []goldmark.Option{
 		goldmark.WithExtensions(
 			extension.GFM,
+			githubAlerts,
 			highlighting.NewHighlighting(highlightOpts...),
 		),
 		goldmark.WithParserOptions(
 			parser.WithAutoHeadingID(),
-			parser.WithASTTransformers(util.Prioritized(imageTransformer, 100)),
+			parser.WithASTTransformers(transformers...),
 		),
 	}
 	if unsafe {
@@ -120,6 +129,9 @@ type Options struct {
 	// SourceDir is the directory trusted local image refs resolve against. Safe
 	// rendering ignores it and never reads image destinations.
 	SourceDir string
+	// RebaseLocalLinks rewrites relative Markdown links against SourceDir. It is
+	// intended for cached file renders whose output lives outside SourceDir.
+	RebaseLocalLinks bool
 	// ImageFingerprint captures local image dependencies that are inlined into
 	// Markdown output. It is computed by callers that have the source bytes and
 	// folded into cache freshness.
@@ -127,6 +139,9 @@ type Options struct {
 	// ReportTag distinguishes report-plan renders from legacy Markdown/plain
 	// renders in the cache fingerprint. Empty preserves legacy cache behavior.
 	ReportTag string
+	// semanticLists is internal report-renderer state. Each ref identifies an
+	// ordered list styled during the same full-document Markdown parse.
+	semanticLists []report.SourceRef
 }
 
 // cacheTag encodes the Options fields that change rendered output, so the
@@ -178,6 +193,9 @@ func (o Options) cacheTag() string {
 	if o.ImageFingerprint != "" {
 		appendCacheTag(&b, "img", o.ImageFingerprint)
 	}
+	if o.RebaseLocalLinks {
+		appendCacheTag(&b, "links", o.SourceDir)
+	}
 	return b.String()
 }
 
@@ -193,11 +211,22 @@ func appendCacheTag(b *strings.Builder, key, value string) {
 // Render converts source into a complete, self-contained HTML document — as
 // Markdown by default, or as preformatted plain text when opts.Plain is set.
 func Render(src []byte, opts Options) (string, error) {
+	html, _, err := RenderWithDiagnostics(src, opts)
+	return html, err
+}
+
+// RenderWithDiagnostics renders src and reports images that could not be
+// embedded. The diagnostics are deterministic and deduplicated by destination
+// and reason. Plain and safe rendering return no diagnostics; safe mode retains
+// its no-filesystem-I/O guarantee.
+func RenderWithDiagnostics(src []byte, opts Options) (string, []ImageDiagnostic, error) {
 	if opts.Plain {
-		return renderPlain(src, opts), nil
+		return renderPlain(src, opts), nil, nil
 	}
 	md := mdUnsafe
 	switch {
+	case len(opts.semanticLists) > 0:
+		md = newMarkdownWithImageLimit(!opts.Safe, opts.CodeTheme, maxInlineImages, semanticListTransformer{refs: opts.semanticLists})
 	case opts.CodeTheme != "":
 		md = newMarkdown(!opts.Safe, opts.CodeTheme)
 	case opts.Safe:
@@ -205,10 +234,13 @@ func Render(src []byte, opts Options) (string, error) {
 	}
 	pc := parser.NewContext()
 	pc.Set(baseDirKey, opts.SourceDir)
+	if opts.RebaseLocalLinks {
+		pc.Set(linkBaseDirKey, opts.SourceDir)
+	}
 	doc := md.Parser().Parse(text.NewReader(src), parser.WithContext(pc))
 	var buf bytes.Buffer
 	if err := md.Renderer().Render(&buf, src, doc); err != nil {
-		return "", err
+		return "", nil, err
 	}
 	title, fromHeading, headings := analyze(doc, src, opts.FallbackTitle)
 	content := buf.String()
@@ -227,7 +259,31 @@ func Render(src []byte, opts Options) (string, error) {
 			content = insertAfterFirstH1(content, toc)
 		}
 	}
-	return wrapPage(title, content, opts), nil
+	return wrapPage(title, content, opts), imageDiagnostics(pc), nil
+}
+
+// ImageDiagnostics returns the image diagnostics for a Markdown render without
+// producing HTML. It is used to preserve warnings on fresh cache hits.
+func ImageDiagnostics(src []byte, opts Options) []ImageDiagnostic {
+	if opts.Plain || opts.Safe {
+		return nil
+	}
+	md := mdUnsafe
+	if opts.CodeTheme != "" {
+		md = newMarkdown(true, opts.CodeTheme)
+	}
+	pc := parser.NewContext()
+	pc.Set(baseDirKey, opts.SourceDir)
+	md.Parser().Parse(text.NewReader(src), parser.WithContext(pc))
+	return imageDiagnostics(pc)
+}
+
+func imageDiagnostics(pc parser.Context) []ImageDiagnostic {
+	state, _ := pc.Get(imageInlinerStateKey).(*imageInlinerState)
+	if state == nil || len(state.diagnostics) == 0 {
+		return nil
+	}
+	return append([]ImageDiagnostic(nil), state.diagnostics...)
 }
 
 // shouldRenderTOC decides whether to emit a table of contents: an explicit

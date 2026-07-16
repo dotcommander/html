@@ -62,8 +62,9 @@ type Options struct {
 }
 
 type Result struct {
-	Path   string
-	Stdout string
+	Path        string
+	Stdout      string
+	Diagnostics []render.ImageDiagnostic
 }
 
 // Run renders the configured source (Options.File or Options.Stdin) to its cache
@@ -89,21 +90,22 @@ func RunWithResult(opts Options) (Result, error) {
 		return runDocumentOutput(opts)
 	}
 	var path string
+	var diagnostics []render.ImageDiagnostic
 	var err error
 	if opts.Stdin != nil {
-		path, err = renderStdin(opts)
+		path, diagnostics, err = renderStdin(opts)
 	} else {
-		path, err = renderFile(opts)
+		path, diagnostics, err = renderFile(opts)
 	}
 	if err != nil {
-		return Result{Path: path}, err
+		return Result{Path: path, Diagnostics: diagnostics}, err
 	}
 	if !opts.NoOpen {
 		if err := open.Open(path, opts.OpenCmd); err != nil {
-			return Result{Path: path}, fmt.Errorf("open browser: %w", err)
+			return Result{Path: path, Diagnostics: diagnostics}, fmt.Errorf("open browser: %w", err)
 		}
 	}
-	return Result{Path: path}, nil
+	return Result{Path: path, Diagnostics: diagnostics}, nil
 }
 
 func runDocumentOutput(opts Options) (Result, error) {
@@ -125,22 +127,22 @@ func runDocumentOutput(opts Options) (Result, error) {
 	}
 	renderOpts := buildRenderOpts(opts, fallbackTitle, sourceName, plain)
 	addImageFingerprint(src, &renderOpts)
-	htmlDoc, err := render.Render(src, renderOpts)
+	htmlDoc, diagnostics, err := render.RenderWithDiagnostics(src, renderOpts)
 	if err != nil {
 		return Result{}, err
 	}
 	if opts.Stdout || opts.Output == "-" {
-		return Result{Stdout: htmlDoc}, nil
+		return Result{Stdout: htmlDoc, Diagnostics: diagnostics}, nil
 	}
 	if err := atomicfile.Write(opts.Output, []byte(htmlDoc), 0o644); err != nil {
 		return Result{}, fmt.Errorf("write output: %w", err)
 	}
 	if !opts.NoOpen {
 		if err := open.Open(opts.Output, opts.OpenCmd); err != nil {
-			return Result{Path: opts.Output}, fmt.Errorf("open browser: %w", err)
+			return Result{Path: opts.Output, Diagnostics: diagnostics}, fmt.Errorf("open browser: %w", err)
 		}
 	}
-	return Result{Path: opts.Output}, nil
+	return Result{Path: opts.Output, Diagnostics: diagnostics}, nil
 }
 
 func runReport(opts Options) (Result, error) {
@@ -177,12 +179,16 @@ func runReport(opts Options) (Result, error) {
 	renderOpts := buildRenderOpts(opts, fallbackTitle, sourceName, plain)
 	renderOpts.ReportTag = reportCacheTag(analysis, plan, opts)
 	addImageFingerprint(src, &renderOpts)
+	var diagnostics []render.ImageDiagnostic
+	if reportRendersArticle(plan) {
+		diagnostics = render.ImageDiagnostics(src, renderOpts)
+	}
 	htmlDoc, err := render.RenderReport(src, renderOpts, analysis, plan)
 	if err != nil {
 		return Result{}, err
 	}
 	if opts.Stdout || opts.Output == "-" {
-		return Result{Stdout: htmlDoc}, nil
+		return Result{Stdout: htmlDoc, Diagnostics: diagnostics}, nil
 	}
 	if opts.Output != "" {
 		if err := atomicfile.Write(opts.Output, []byte(htmlDoc), 0o644); err != nil {
@@ -190,10 +196,10 @@ func runReport(opts Options) (Result, error) {
 		}
 		if !opts.NoOpen {
 			if err := open.Open(opts.Output, opts.OpenCmd); err != nil {
-				return Result{Path: opts.Output}, fmt.Errorf("open browser: %w", err)
+				return Result{Path: opts.Output, Diagnostics: diagnostics}, fmt.Errorf("open browser: %w", err)
 			}
 		}
-		return Result{Path: opts.Output}, nil
+		return Result{Path: opts.Output, Diagnostics: diagnostics}, nil
 	}
 
 	fp := render.Fingerprint(renderOpts)
@@ -224,10 +230,19 @@ func runReport(opts Options) (Result, error) {
 	}
 	if !opts.NoOpen {
 		if err := open.Open(path, opts.OpenCmd); err != nil {
-			return Result{Path: path}, fmt.Errorf("open browser: %w", err)
+			return Result{Path: path, Diagnostics: diagnostics}, fmt.Errorf("open browser: %w", err)
 		}
 	}
-	return Result{Path: path}, nil
+	return Result{Path: path, Diagnostics: diagnostics}, nil
+}
+
+func reportRendersArticle(plan report.ReportPlan) bool {
+	for _, component := range plan.Components {
+		if component.Type == report.ComponentArticle || component.Type == report.ComponentTimeline {
+			return true
+		}
+	}
+	return false
 }
 
 func readInput(opts Options) (src []byte, fallbackTitle, sourceName string, err error) {
@@ -327,13 +342,13 @@ type reportCacheAnalysis struct {
 
 // renderFile renders a source file. Mode is decided by extension/flags without
 // reading the file, so a fresh cache hit returns immediately without a read.
-func renderFile(opts Options) (string, error) {
+func renderFile(opts Options) (string, []render.ImageDiagnostic, error) {
 	info, err := os.Stat(opts.File)
 	if err != nil {
-		return "", fmt.Errorf("source file: %w", err)
+		return "", nil, fmt.Errorf("source file: %w", err)
 	}
 	if info.IsDir() {
-		return "", fmt.Errorf("source file: %s is a directory", opts.File)
+		return "", nil, fmt.Errorf("source file: %s is a directory", opts.File)
 	}
 
 	fallbackTitle := strings.TrimSuffix(filepath.Base(opts.File), filepath.Ext(opts.File))
@@ -342,49 +357,51 @@ func renderFile(opts Options) (string, error) {
 
 	f, err := os.Open(opts.File)
 	if err != nil {
-		return "", fmt.Errorf("source file: %w", err)
+		return "", nil, fmt.Errorf("source file: %w", err)
 	}
 	src, err := readCapped(f, "source file "+opts.File)
 	f.Close()
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if render.Detect(src) == render.KindBinary {
-		return "", errBinaryInput
+		return "", nil, errBinaryInput
 	}
 	addImageFingerprint(src, &renderOpts)
 	fp := render.Fingerprint(renderOpts)
 
 	fresh, err := cache.Fresh(opts.File, src, fp)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if fresh && !opts.Force {
-		return cache.PathFor(opts.File)
+		path, err := cache.PathFor(opts.File)
+		return path, render.ImageDiagnostics(src, renderOpts), err
 	}
 
-	htmlDoc, err := render.Render(src, renderOpts)
+	htmlDoc, diagnostics, err := render.RenderWithDiagnostics(src, renderOpts)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
-	return cache.Write(opts.File, src, htmlDoc, fp)
+	path, err := cache.Write(opts.File, src, htmlDoc, fp)
+	return path, diagnostics, err
 }
 
 // renderStdin renders piped data. The bytes must be read up front (to auto-detect
 // the mode and to key the cache by content), so there is no mtime fast-path: the
 // content hash is the cache key.
-func renderStdin(opts Options) (string, error) {
+func renderStdin(opts Options) (string, []render.ImageDiagnostic, error) {
 	src, err := readCapped(opts.Stdin, "stdin")
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if len(src) == 0 {
-		return "", errors.New("no input on stdin")
+		return "", nil, errors.New("no input on stdin")
 	}
 
 	kind := render.Detect(src)
 	if kind == render.KindBinary {
-		return "", errBinaryInput
+		return "", nil, errBinaryInput
 	}
 	plain := resolveMode(opts.Plain, opts.Markdown, kind != render.KindMarkdown)
 	renderOpts := buildRenderOpts(opts, stdinTitle(opts.Title), "", plain)
@@ -393,17 +410,19 @@ func renderStdin(opts Options) (string, error) {
 
 	fresh, err := cache.FreshContent(src, fp)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if fresh && !opts.Force {
-		return cache.PathForContent(src)
+		path, err := cache.PathForContent(src)
+		return path, render.ImageDiagnostics(src, renderOpts), err
 	}
 
-	htmlDoc, err := render.Render(src, renderOpts)
+	htmlDoc, diagnostics, err := render.RenderWithDiagnostics(src, renderOpts)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
-	return cache.WriteContent(src, htmlDoc, fp)
+	path, err := cache.WriteContent(src, htmlDoc, fp)
+	return path, diagnostics, err
 }
 
 // resolveMode decides plain vs Markdown. An explicit flag wins (--markdown, then
@@ -435,20 +454,27 @@ func buildRenderOpts(opts Options, fallbackTitle, sourceName string, plain bool)
 	sourceDir := ""
 	if opts.File != "" {
 		sourceDir = filepath.Dir(opts.File)
+		if abs, err := filepath.Abs(sourceDir); err == nil {
+			sourceDir = abs
+		}
 	}
 	return render.Options{
 		FallbackTitle: fallbackTitle,
 		SourceName:    sourceName,
 		SourceDir:     sourceDir,
-		Lang:          opts.Lang,
-		CodeTheme:     opts.CodeTheme,
-		Safe:          opts.Safe,
-		MaxWidth:      opts.MaxWidth,
-		Theme:         opts.Theme,
-		Palette:       opts.Palette,
-		TOC:           opts.TOC,
-		Plain:         plain,
-		Frame:         opts.Frame,
+		// Safe mode keeps relative links as written. Goldmark intentionally blocks
+		// generated file: URLs, and bypassing that guard would weaken its untrusted-
+		// input boundary.
+		RebaseLocalLinks: opts.File != "" && opts.Output == "" && !opts.Stdout && !opts.Safe,
+		Lang:             opts.Lang,
+		CodeTheme:        opts.CodeTheme,
+		Safe:             opts.Safe,
+		MaxWidth:         opts.MaxWidth,
+		Theme:            opts.Theme,
+		Palette:          opts.Palette,
+		TOC:              opts.TOC,
+		Plain:            plain,
+		Frame:            opts.Frame,
 	}
 }
 

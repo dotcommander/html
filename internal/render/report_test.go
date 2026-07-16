@@ -51,6 +51,54 @@ func TestRenderReport_TabInitialFocusState(t *testing.T) {
 	assert.Equal(t, 1, strings.Count(got, `tabindex="0"`), "only the selected tab should be in the tab order")
 }
 
+func TestRenderReport_SemanticTimelineUsesSingleDocumentParse(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("# Release\n\n[guide]: https://example.com/release\n\n## Steps\n\n3. Read the [release guide][guide].\n\n   - Keep the checksum.\n   - Keep `release.json`.\n\n4. Run `go test ./...` for **v1.2.3**.\n")
+	analysis, plan := report.Plan(t.Context(), src, report.Options{Planner: report.PlannerOff})
+
+	got, err := RenderReport(src, Options{FallbackTitle: "release"}, analysis, plan)
+	require.NoError(t, err)
+
+	assert.Contains(t, got, `<ol start="3" class="report-timeline-list">`)
+	assert.Equal(t, 2, strings.Count(got, `class="report-timeline-item"`))
+	assert.Contains(t, got, `<a href="https://example.com/release">release guide</a>`)
+	assert.Contains(t, got, `<li>Keep the checksum.</li>`)
+	assert.Contains(t, got, `<li>Keep <code>release.json</code>.</li>`)
+	assert.Contains(t, got, `<code>go test ./...</code>`)
+	assert.Contains(t, got, `<strong>v1.2.3</strong>`)
+	assert.Equal(t, 1, strings.Count(got, `<h1 id="release">Release</h1>`))
+}
+
+func TestRenderReport_SemanticTimelineSafeModeStillOmitsRawHTML(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("# Release\n\n## Steps\n\n1. Keep <strong>safe</strong>.\n2. Drop <script>alert('xss')</script>.\n")
+	analysis, plan := report.Plan(t.Context(), src, report.Options{Planner: report.PlannerOff})
+
+	got, err := RenderReport(src, Options{FallbackTitle: "release", Safe: true}, analysis, plan)
+	require.NoError(t, err)
+
+	assert.Contains(t, got, `class="report-timeline-list"`)
+	assert.NotContains(t, got, "<script>alert('xss')</script>")
+	assert.NotContains(t, got, "<strong>safe</strong>")
+}
+
+func TestRenderReport_StaleSemanticPlanFallsBackToArticle(t *testing.T) {
+	t.Parallel()
+
+	planned := []byte("# Release\n\n## Steps\n\n1. Test.\n2. Publish.\n")
+	analysis, plan := report.Plan(t.Context(), planned, report.Options{Planner: report.PlannerOff})
+	changed := []byte("# Release\n\n## Steps\n\n1. Test.\n2. Archive.\n")
+
+	got, err := RenderReport(changed, Options{FallbackTitle: "release"}, analysis, plan)
+	require.NoError(t, err)
+
+	assert.NotContains(t, got, `class="report-timeline-list"`)
+	assert.Contains(t, got, `<li>Archive.</li>`)
+	assert.Contains(t, got, `<dl class="article-overview"`)
+}
+
 func TestRenderReport_TabbedLayoutWithSingleComponent(t *testing.T) {
 	t.Parallel()
 

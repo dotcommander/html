@@ -2,10 +2,11 @@ package render
 
 import "embed"
 
-//go:embed assets/base.css assets/copy.js assets/theme.js assets/headings.js assets/report.js assets/frame.css
+//go:embed assets/base.css assets/alerts.css assets/copy.js assets/theme.js assets/headings.js assets/report.js assets/frame.css
 var assetsFS embed.FS
 
 func baseCSS() string    { return mustReadAsset("assets/base.css") }
+func alertCSS() string   { return mustReadAsset("assets/alerts.css") }
 func copyJS() string     { return mustReadAsset("assets/copy.js") }
 func themeJS() string    { return mustReadAsset("assets/theme.js") }
 func headingsJS() string { return mustReadAsset("assets/headings.js") }

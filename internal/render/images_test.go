@@ -141,3 +141,57 @@ func TestInlineImage_PerImageBudgetLeavesReferenceExternal(t *testing.T) {
 	assert.Contains(t, got, `src="large.png"`)
 	assert.NotContains(t, got, "data:image/png;base64,")
 }
+
+func TestRenderWithDiagnostics_ClassifiesAndDeduplicatesImages(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmp, "local.png"), []byte("png"), 0o644))
+	require.NoError(t, os.Mkdir(filepath.Join(tmp, "directory.png"), 0o755))
+	large, err := os.Create(filepath.Join(tmp, "large.png"))
+	require.NoError(t, err)
+	require.NoError(t, large.Truncate(maxInlineImage+1))
+	require.NoError(t, large.Close())
+
+	src := []byte(strings.Join([]string{
+		`![remote](https://example.com/x.png)`,
+		`![missing](missing.png)`,
+		`![missing again](missing.png)`,
+		`![unsupported](image.tiff)`,
+		`![unreadable](directory.png)`,
+		`![oversized](large.png)`,
+		`![local](local.png)`,
+		`![embedded](data:image/png;base64,eA==)`,
+	}, "\n\n"))
+
+	_, diagnostics, err := RenderWithDiagnostics(src, Options{SourceDir: tmp, FallbackTitle: "t"})
+	require.NoError(t, err)
+	assert.Equal(t, []ImageDiagnostic{
+		{Code: DiagnosticImageRemote, Destination: "https://example.com/x.png"},
+		{Code: DiagnosticImageMissing, Destination: "missing.png"},
+		{Code: DiagnosticImageUnsupported, Destination: "image.tiff"},
+		{Code: DiagnosticImageUnreadable, Destination: "directory.png"},
+		{Code: DiagnosticImageOversized, Destination: "large.png"},
+	}, diagnostics)
+}
+
+func TestImageDiagnostics_AggregateBudgetAndSafeMode(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmp, "small.png"), []byte("x"), 0o644))
+	src := []byte("![small](small.png)\n")
+
+	md := newMarkdownWithImageLimit(true, "", 1)
+	pc := parser.NewContext()
+	pc.Set(baseDirKey, tmp)
+	md.Parser().Parse(text.NewReader(src), parser.WithContext(pc))
+	assert.Equal(t, []ImageDiagnostic{{Code: DiagnosticImageOverBudget, Destination: "small.png"}}, imageDiagnostics(pc))
+
+	_, diagnostics, err := RenderWithDiagnostics(
+		[]byte("![missing](missing.png)\n"),
+		Options{SourceDir: tmp, FallbackTitle: "safe", Safe: true},
+	)
+	require.NoError(t, err)
+	assert.Empty(t, diagnostics)
+}
