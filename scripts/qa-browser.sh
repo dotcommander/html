@@ -31,6 +31,49 @@ capture() {
   [[ -s "$png" ]] || fail "$name screenshot is empty: $png"
 }
 
+capture_design_contract_matrix() {
+  local widths=(320 375 414 768)
+  local cases=(
+    "markdown-components|${matrix_markdown_components_url}"
+    "table-tabs|${matrix_csv_tabs_url}"
+    "slides|${matrix_markdown_slides_url}"
+    "media|${media_url}"
+  )
+  local case_entry name url width metrics_file state_expr
+  local capture_args=()
+
+  for case_entry in "${cases[@]}"; do
+    name="${case_entry%%|*}"
+    url="${case_entry#*|}"
+
+    case "$name" in
+      markdown-components)
+        capture_args=(--click-copy --focus-selector .copy-btn)
+        state_expr='.copy_status == "Copied" and .focus_visible == true and .focus_selector == ".copy-btn"'
+        ;;
+      table-tabs)
+        capture_args=(--click-tab Records --focus-selector '#report-tab-1')
+        state_expr='.selected_tab == "Records" and (.visible_tab_panel | contains("Records")) and .focus_visible == true and .focus_selector == "#report-tab-1"'
+        ;;
+      slides)
+        capture_args=(--click-slide-next --focus-selector '[data-slide-next]')
+        state_expr='.initial_slide_prev_disabled == true and .initial_slide_prev_style == "opacity=0.55;cursor=not-allowed" and .slide_status == "2 / 3" and (.current_slide | contains("Slide 2 of 3")) and .focus_visible == true and .focus_selector == "[data-slide-next]"'
+        ;;
+      media)
+        capture_args=(--focus-selector '#theme-toggle')
+        state_expr='.focus_visible == true and .focus_selector == "#theme-toggle"'
+        ;;
+    esac
+    for width in "${widths[@]}"; do
+      capture "design-contract-${name}" "$url" "$width" 900 "${capture_args[@]}"
+      metrics_file="${out_dir}/design-contract-${name}-${width}x900.json"
+      require_json_file "design-contract-${name}-${width}" "$metrics_file" \
+        '.scroll_width <= .client_width and .body_width <= .client_width and .clickables_checked > 0 and (.wrapped_clickables | length) == 0 and .contrast_candidates > 0 and .contrast_checked == .contrast_candidates and (.contrast_skips | length) == 0 and (.contrast_failures | length) == 0'
+      require_json_file "design-contract-${name}-${width}-state" "$metrics_file" "$state_expr"
+    done
+  done
+}
+
 require_metric() {
   local name="$1"
   local metrics="$2"
@@ -399,6 +442,8 @@ slides_url="file://${repo_dir}/.work/html-qa/cli-smoke/out/slides.html"
 tabs_url="file://${repo_dir}/.work/html-qa/cli-smoke/out/tabs.html"
 table_url="file://${repo_dir}/.work/html-qa/cli-smoke/out/table.html"
 stdout_table_url="file://${repo_dir}/.work/html-qa/cli-smoke/out/stdout-table.html"
+
+capture_design_contract_matrix
 
 capture dashboard "$dashboard_url" 1440 900
 require_json_file dashboard "${out_dir}/dashboard-1440x900.json" "$dashboard_expr"

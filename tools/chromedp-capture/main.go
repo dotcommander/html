@@ -105,6 +105,51 @@ type metrics struct {
 	ScrollWidth           int64            `json:"scroll_width"`
 	BodyWidth             int64            `json:"body_width"`
 	DocHeight             int64            `json:"doc_height"`
+	ClickablesChecked     int64            `json:"clickables_checked"`
+	WrappedClickables     []wrapIssue      `json:"wrapped_clickables"`
+	ContrastCandidates    int64            `json:"contrast_candidates"`
+	ContrastChecked       int64            `json:"contrast_checked"`
+	ContrastFailures      []contrastIssue  `json:"contrast_failures"`
+	ContrastSkips         []contrastSkip   `json:"contrast_skips"`
+	FocusSelector         string           `json:"focus_selector,omitempty"`
+	FocusVisible          bool             `json:"focus_visible,omitempty"`
+	FocusEvidence         string           `json:"focus_evidence,omitempty"`
+	CopyStatus            string           `json:"copy_status,omitempty"`
+	InitialSlidePrevOff   bool             `json:"initial_slide_prev_disabled,omitempty"`
+	InitialSlidePrevStyle string           `json:"initial_slide_prev_style,omitempty"`
+}
+
+type wrapIssue struct {
+	Selector string  `json:"selector"`
+	Text     string  `json:"text"`
+	Lines    int64   `json:"lines"`
+	Width    float64 `json:"width"`
+	Height   float64 `json:"height"`
+}
+
+type contrastIssue struct {
+	Selector   string  `json:"selector"`
+	Text       string  `json:"text"`
+	Foreground string  `json:"foreground"`
+	Background string  `json:"background"`
+	Ratio      float64 `json:"ratio"`
+	Required   float64 `json:"required"`
+	Reason     string  `json:"reason"`
+}
+
+type contrastSkip struct {
+	Selector string `json:"selector"`
+	Text     string `json:"text"`
+	Reason   string `json:"reason"`
+}
+
+type designContractMetrics struct {
+	ClickablesChecked  int64           `json:"clickables_checked"`
+	WrappedClickables  []wrapIssue     `json:"wrapped_clickables"`
+	ContrastCandidates int64           `json:"contrast_candidates"`
+	ContrastChecked    int64           `json:"contrast_checked"`
+	ContrastFailures   []contrastIssue `json:"contrast_failures"`
+	ContrastSkips      []contrastSkip  `json:"contrast_skips"`
 }
 
 func main() {
@@ -115,10 +160,12 @@ func main() {
 	palette := flag.String("palette", "", "palette button to click before capture")
 	clickThemeToggle := flag.Bool("click-theme-toggle", false, "click the light/dark theme toggle before capture")
 	clickSlideNext := flag.Bool("click-slide-next", false, "click the first report slide next button before capture")
+	clickCopy := flag.Bool("click-copy", false, "click the first code copy button before capture")
 	filter := flag.String("filter", "", "table filter text to type before capture")
 	sortHeader := flag.String("sort-header", "", "table header text to click before capture")
 	mobileSort := flag.String("mobile-sort", "", "mobile sort select value, for example 1:descending")
 	clickTab := flag.String("click-tab", "", "tab button text to click before capture")
+	focusSelector := flag.String("focus-selector", "", "CSS selector to focus and inspect before capture")
 	flag.Parse()
 
 	if *url == "" || *out == "" {
@@ -156,10 +203,12 @@ func main() {
 	var png []byte
 	var title string
 	var m metrics
+	var designMetrics designContractMetrics
 	var consoleMu sync.Mutex
 	m.URL = *url
 	m.ViewportW = *width
 	m.ViewportH = *height
+	m.FocusSelector = *focusSelector
 
 	chromedp.ListenTarget(ctx, func(ev any) {
 		consoleMu.Lock()
@@ -193,6 +242,13 @@ func main() {
 		chromedp.Navigate(*url),
 		chromedp.WaitReady("body", chromedp.ByQuery),
 		chromedp.Sleep(750*time.Millisecond),
+		chromedp.Evaluate(`Boolean(document.querySelector("[data-slide-prev]")?.disabled)`, &m.InitialSlidePrevOff),
+		chromedp.Evaluate(`(() => {
+			const button = document.querySelector("[data-slide-prev]");
+			if (!button) return "";
+			const style = getComputedStyle(button);
+			return "opacity=" + style.opacity + ";cursor=" + style.cursor;
+		})()`, &m.InitialSlidePrevStyle),
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			if !*clickThemeToggle {
 				return nil
@@ -217,6 +273,24 @@ func main() {
 			}
 			sel := fmt.Sprintf(`//button[@role="tab" and normalize-space(.)=%q]`, *clickTab)
 			return chromedp.Click(sel, chromedp.BySearch).Do(ctx)
+		}),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			if !*clickCopy {
+				return nil
+			}
+			if err := chromedp.Click(`.copy-btn`, chromedp.ByQuery).Do(ctx); err != nil {
+				return err
+			}
+			return chromedp.Sleep(100 * time.Millisecond).Do(ctx)
+		}),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			if *focusSelector == "" {
+				return nil
+			}
+			if err := chromedp.KeyEvent("\t").Do(ctx); err != nil {
+				return err
+			}
+			return chromedp.Focus(*focusSelector, chromedp.ByQuery).Do(ctx)
 		}),
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			if *filter == "" {
@@ -269,6 +343,23 @@ func main() {
 		})()`, &m.EmptyRowVisible),
 		chromedp.Evaluate(`document.querySelector('[role="tab"][aria-selected="true"]')?.textContent.trim().replace(/\s+/g, " ") || ""`, &m.SelectedTab),
 		chromedp.Evaluate(`document.querySelector('[role="tabpanel"]:not([hidden])')?.textContent.trim().replace(/\s+/g, " ").slice(0, 80) || ""`, &m.VisibleTabPanel),
+		chromedp.Evaluate(`document.querySelector(".copy-btn")?.textContent.trim() || ""`, &m.CopyStatus),
+		chromedp.Evaluate(fmt.Sprintf(`(() => {
+			const target = %q;
+			if (!target) return false;
+			const element = document.querySelector(target);
+			if (!element || document.activeElement !== element) return false;
+			const style = getComputedStyle(element);
+			return Number.parseFloat(style.outlineWidth) > 0 && style.outlineStyle !== "none";
+		})()`, *focusSelector), &m.FocusVisible),
+		chromedp.Evaluate(fmt.Sprintf(`(() => {
+			const target = %q;
+			if (!target) return "";
+			const element = document.querySelector(target);
+			if (!element || document.activeElement !== element) return "target is not active";
+			const style = getComputedStyle(element);
+			return "outline=" + style.outline + ";outline-offset=" + style.outlineOffset + ";box-shadow=" + style.boxShadow;
+		})()`, *focusSelector), &m.FocusEvidence),
 		chromedp.Evaluate(`(() => {
 			const controls = document.querySelector(".theme-controls");
 			return controls ? getComputedStyle(controls).display : "";
@@ -896,12 +987,19 @@ func main() {
 		chromedp.Evaluate(`document.documentElement.scrollWidth`, &m.ScrollWidth),
 		chromedp.Evaluate(`document.body.scrollWidth`, &m.BodyWidth),
 		chromedp.Evaluate(`Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)`, &m.DocHeight),
+		chromedp.Evaluate(designContractScript, &designMetrics),
 		chromedp.FullScreenshot(&png, 100),
 	); err != nil {
 		fmt.Fprintf(os.Stderr, "capture: %v\n", err)
 		os.Exit(1)
 	}
 	m.Title = title
+	m.ClickablesChecked = designMetrics.ClickablesChecked
+	m.WrappedClickables = designMetrics.WrappedClickables
+	m.ContrastCandidates = designMetrics.ContrastCandidates
+	m.ContrastChecked = designMetrics.ContrastChecked
+	m.ContrastFailures = designMetrics.ContrastFailures
+	m.ContrastSkips = designMetrics.ContrastSkips
 
 	if err := os.MkdirAll(filepath.Dir(*out), 0o755); err != nil {
 		fmt.Fprintf(os.Stderr, "mkdir: %v\n", err)
@@ -916,6 +1014,135 @@ func main() {
 		os.Exit(1)
 	}
 }
+
+const designContractScript = `(() => {
+	const visible = (element) => {
+		const style = getComputedStyle(element);
+		const rect = element.getBoundingClientRect();
+		return style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0;
+	};
+	const text = (element) => (element.innerText || element.value || element.getAttribute("aria-label") || "").trim().replace(/\s+/g, " ").slice(0, 120);
+	const selector = (element) => {
+		if (element.id) return "#" + CSS.escape(element.id);
+		const parts = [];
+		for (let node = element; node && node.nodeType === Node.ELEMENT_NODE && node !== document.documentElement; node = node.parentElement) {
+			let part = node.localName;
+			const stableClass = Array.from(node.classList).find((name) => !/^active$|^selected$|^visible$/.test(name));
+			if (stableClass) part += "." + CSS.escape(stableClass);
+			const siblings = node.parentElement ? Array.from(node.parentElement.children).filter((item) => item.localName === node.localName) : [];
+			if (siblings.length > 1) part += ":nth-of-type(" + (siblings.indexOf(node) + 1) + ")";
+			parts.unshift(part);
+			if (parts.length === 4) break;
+		}
+		return parts.join(" > ");
+	};
+	const lineCount = (element) => {
+		const range = document.createRange();
+		range.selectNodeContents(element);
+		const tops = [];
+		for (const rect of range.getClientRects()) {
+			if (rect.width > 0 && !tops.some((top) => Math.abs(top - rect.top) < 2)) tops.push(rect.top);
+		}
+		return tops.length;
+	};
+
+	const clickableSelector = "a[href], button, [role='button'], [role='tab'], label[for]";
+	const clickables = Array.from(document.querySelectorAll(clickableSelector)).filter((element) => visible(element) && text(element));
+	const wrappedClickables = clickables.flatMap((element) => {
+		const lines = lineCount(element);
+		if (lines <= 1) return [];
+		const rect = element.getBoundingClientRect();
+		return [{ selector: selector(element), text: text(element), lines, width: Math.round(rect.width * 10) / 10, height: Math.round(rect.height * 10) / 10 }];
+	});
+
+	const parseColor = (value) => {
+		const match = value.match(/^rgba?\(\s*([\d.]+)[, ]+\s*([\d.]+)[, ]+\s*([\d.]+)(?:\s*[,/]\s*([\d.]+))?\s*\)$/i);
+		if (match) return { r: Number(match[1]), g: Number(match[2]), b: Number(match[3]), a: match[4] === undefined ? 1 : Number(match[4]) };
+		const srgb = value.match(/^color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+))?\)$/i);
+		return srgb ? { r: Number(srgb[1]) * 255, g: Number(srgb[2]) * 255, b: Number(srgb[3]) * 255, a: srgb[4] === undefined ? 1 : Number(srgb[4]) } : null;
+	};
+	const composite = (front, back) => {
+		const alpha = front.a + back.a * (1 - front.a);
+		if (alpha === 0) return { r: 0, g: 0, b: 0, a: 0 };
+		return {
+			r: (front.r * front.a + back.r * back.a * (1 - front.a)) / alpha,
+			g: (front.g * front.a + back.g * back.a * (1 - front.a)) / alpha,
+			b: (front.b * front.a + back.b * back.a * (1 - front.a)) / alpha,
+			a: alpha
+		};
+	};
+	const background = (element) => {
+		let color = { r: 0, g: 0, b: 0, a: 0 };
+		let targetOpacity = 1;
+		for (let node = element; node; node = node.parentElement) {
+			const style = getComputedStyle(node);
+			if (style.backgroundImage !== "none") return { color: null, reason: "gradient or background image on " + selector(node) };
+			const opacity = Number(style.opacity);
+			if (opacity !== 1 && node !== element) return { color: null, reason: "ancestor opacity on " + selector(node) };
+			if (node === element) targetOpacity = opacity;
+			if (style.mixBlendMode !== "normal") return { color: null, reason: "blend mode on " + selector(node) };
+			const layer = parseColor(style.backgroundColor);
+			if (!layer) return { color: null, reason: "unparsed background color on " + selector(node) + ": " + style.backgroundColor };
+			if (node === element) layer.a *= targetOpacity;
+			color = composite(color, layer);
+			if (color.a >= 0.999) return { color, opacity: targetOpacity, reason: "" };
+		}
+		return { color: composite(color, { r: 255, g: 255, b: 255, a: 1 }), opacity: targetOpacity, reason: "" };
+	};
+	const luminance = (color) => {
+		const channel = (value) => {
+			value /= 255;
+			return value <= 0.04045 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
+		};
+		return 0.2126 * channel(color.r) + 0.7152 * channel(color.g) + 0.0722 * channel(color.b);
+	};
+	const ratio = (left, right) => {
+		const a = luminance(left);
+		const b = luminance(right);
+		return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+	};
+	const rgb = (color) => "rgb(" + Math.round(color.r) + ", " + Math.round(color.g) + ", " + Math.round(color.b) + ")";
+	const contrastSelector = "button:not(:disabled), [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), input:not(:disabled), select:not(:disabled), textarea:not(:disabled)";
+	const contrastCandidates = Array.from(document.querySelectorAll(contrastSelector)).filter((element) => visible(element) && text(element));
+	const checked = [];
+	const contrastFailures = [];
+	const contrastSkips = [];
+	for (const element of contrastCandidates) {
+		const style = getComputedStyle(element);
+		const foreground = parseColor(style.color);
+		if (!foreground) {
+			contrastSkips.push({ selector: selector(element), text: text(element), reason: "unparsed foreground color: " + style.color });
+			continue;
+		}
+		const resolvedBackground = background(element);
+		if (!resolvedBackground.color) {
+			contrastSkips.push({ selector: selector(element), text: text(element), reason: resolvedBackground.reason });
+			continue;
+		}
+		const backdrop = resolvedBackground.color;
+		foreground.a *= resolvedBackground.opacity;
+		const finalForeground = composite(foreground, backdrop);
+		const fontSize = Number.parseFloat(style.fontSize);
+		const fontWeight = Number.parseInt(style.fontWeight, 10) || 400;
+		const required = fontSize >= 24 || (fontSize >= 18.66 && fontWeight >= 700) ? 3 : 4.5;
+		const measured = ratio(finalForeground, backdrop);
+		checked.push(element);
+		if (measured + 0.01 < required) {
+			contrastFailures.push({
+				selector: selector(element), text: text(element), foreground: rgb(finalForeground), background: rgb(backdrop),
+				ratio: Math.round(measured * 100) / 100, required, reason: "text contrast below WCAG AA"
+			});
+		}
+	}
+	return {
+		clickables_checked: clickables.length,
+		wrapped_clickables: wrappedClickables,
+		contrast_candidates: contrastCandidates.length,
+		contrast_checked: checked.length,
+		contrast_failures: contrastFailures,
+		contrast_skips: contrastSkips
+	};
+})()`
 
 func appendConsoleMessage(messages []string, message string) []string {
 	message = strings.TrimSpace(message)
