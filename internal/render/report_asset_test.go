@@ -238,7 +238,7 @@ func TestRecordCardCSSWrapsLongTitles(t *testing.T) {
 	assert.Contains(t, css, ".record-card h3 {\n  margin-top: 0;")
 	assert.Contains(t, css, "overflow-wrap: anywhere;")
 	assert.Contains(t, css, ".record-empty {\n  margin: 0;")
-	assert.Contains(t, css, `font: 0.92rem ui-sans-serif`)
+	assert.Contains(t, css, `font: 0.92rem var(--font-sans)`)
 }
 
 func TestTranscriptCSSProvidesTurnLayout(t *testing.T) {

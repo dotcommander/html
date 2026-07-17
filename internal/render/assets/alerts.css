@@ -10,19 +10,13 @@
 .markdown-alert-title {
   margin: 0 0 0.35em;
   color: var(--alert-color);
-  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-sans);
   font-weight: 700;
 }
 
 .markdown-alert > :last-child { margin-bottom: 0; }
-.markdown-alert-note { --alert-color: #0969da; }
-.markdown-alert-tip { --alert-color: #1a7f37; }
-.markdown-alert-important { --alert-color: #8250df; }
-.markdown-alert-warning { --alert-color: #9a6700; }
-.markdown-alert-caution { --alert-color: #d1242f; }
-
-:root[data-theme="dark"] .markdown-alert-note { --alert-color: #58a6ff; }
-:root[data-theme="dark"] .markdown-alert-tip { --alert-color: #3fb950; }
-:root[data-theme="dark"] .markdown-alert-important { --alert-color: #a371f7; }
-:root[data-theme="dark"] .markdown-alert-warning { --alert-color: #d29922; }
-:root[data-theme="dark"] .markdown-alert-caution { --alert-color: #f85149; }
+.markdown-alert-note { --alert-color: var(--alert-note); }
+.markdown-alert-tip { --alert-color: var(--alert-tip); }
+.markdown-alert-important { --alert-color: var(--alert-important); }
+.markdown-alert-warning { --alert-color: var(--alert-warning); }
+.markdown-alert-caution { --alert-color: var(--alert-caution); }
