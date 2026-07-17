@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.2.1 - 2026-07-16
+
+### Quality
+
+- Centralize static embedded stylesheet colors and font stacks into semantic design tokens.
+- Enforce design-token usage across static renderer stylesheets with tests.
+- Expand browser QA for control wrapping and text contrast, focus visibility, copy feedback, tabs, and slide controls.
+
 ## v0.2.0 - 2026-07-16
 
 ### Features
