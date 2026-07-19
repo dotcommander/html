@@ -555,23 +555,27 @@ require_json_file theme-gallery "${out_dir}/theme-gallery-1440x900.json" "$theme
 capture theme-gallery "$theme_url" 390 900
 require_json_file theme-gallery "${out_dir}/theme-gallery-390x900.json" "$theme_gallery_expr"
 
-declare -A theme_accents=(
-  [light-sepia]="#9f5b2d"
-  [light-blue]="#2563eb"
-  [light-green]="#2d7a46"
-  [light-rose]="#be4b75"
-  [light-catppuccin]="#8839ef"
-  [dark-sepia]="#e0a05f"
-  [dark-blue]="#6da8ff"
-  [dark-green]="#79c48a"
-  [dark-rose]="#f08ab2"
-  [dark-catppuccin]="#cba6f7"
-)
+theme_accent() {
+  case "$1" in
+    light-sepia) printf '#9f5b2d' ;;
+    light-blue) printf '#2563eb' ;;
+    light-green) printf '#2d7a46' ;;
+    light-rose) printf '#be4b75' ;;
+    light-catppuccin) printf '#8839ef' ;;
+    dark-sepia) printf '#e0a05f' ;;
+    dark-blue) printf '#6da8ff' ;;
+    dark-green) printf '#79c48a' ;;
+    dark-rose) printf '#f08ab2' ;;
+    dark-catppuccin) printf '#cba6f7' ;;
+    *) fail "unknown theme palette: $1" ;;
+  esac
+}
 for theme in light dark; do
   for palette in sepia blue green rose catppuccin; do
     key="${theme}-${palette}"
     capture "theme-${key}" "file://${repo_dir}/.work/html-qa/theme-gallery/${key}.html" 390 900
-    require_json_file "theme-${key}" "${out_dir}/theme-${key}-390x900.json" ".theme == \"${theme}\" and .palette == \"${palette}\" and .accent == \"${theme_accents[$key]}\" and .theme_controls_one_row == true and .iframe_count == 10 and .iframe_loaded_frames == 10"
+    accent="$(theme_accent "$key")"
+    require_json_file "theme-${key}" "${out_dir}/theme-${key}-390x900.json" ".theme == \"${theme}\" and .palette == \"${palette}\" and .accent == \"${accent}\" and .theme_controls_one_row == true and .iframe_count == 10 and .iframe_loaded_frames == 10"
   done
 done
 
