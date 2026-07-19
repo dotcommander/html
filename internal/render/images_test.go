@@ -77,6 +77,75 @@ func TestInlineImage_RemoteUnchanged(t *testing.T) {
 	assert.NotContains(t, got, "base64")
 }
 
+func TestInlineImage_LocalReferenceWithoutSourceDirectoryHasNoDiagnostic(t *testing.T) {
+	t.Parallel()
+
+	got, diagnostics, err := RenderWithDiagnostics(
+		[]byte("![local](image.png)\n"),
+		Options{FallbackTitle: "stdin"},
+	)
+	require.NoError(t, err)
+	assert.Contains(t, got, `src="image.png"`)
+	assert.NotContains(t, got, "base64")
+	assert.Empty(t, diagnostics)
+}
+
+func TestInlineImage_RejectsPathsOutsideSourceDirectory(t *testing.T) {
+	t.Parallel()
+
+	parent := t.TempDir()
+	baseDir := filepath.Join(parent, "docs")
+	require.NoError(t, os.Mkdir(baseDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(parent, "outside.png"), []byte("private bytes"), 0o644))
+
+	src := []byte("![outside](../outside.png)\n")
+	got, diagnostics, err := RenderWithDiagnostics(src, Options{SourceDir: baseDir, FallbackTitle: "t"})
+	require.NoError(t, err)
+	assert.Contains(t, got, `src="../outside.png"`)
+	assert.NotContains(t, got, "private bytes")
+	assert.Equal(t, []ImageDiagnostic{{Code: DiagnosticImageOutsideRoot, Destination: "../outside.png"}}, diagnostics)
+	assert.Empty(t, ImageDependencyFingerprint(src, baseDir))
+}
+
+func TestInlineImage_RejectsAbsolutePathOutsideSourceDirectory(t *testing.T) {
+	t.Parallel()
+
+	parent := t.TempDir()
+	baseDir := filepath.Join(parent, "docs")
+	outPath := filepath.Join(parent, "outside.png")
+	require.NoError(t, os.Mkdir(baseDir, 0o755))
+	require.NoError(t, os.WriteFile(outPath, []byte("private bytes"), 0o644))
+
+	src := []byte("![outside](" + outPath + ")\n")
+	got, diagnostics, err := RenderWithDiagnostics(src, Options{SourceDir: baseDir, FallbackTitle: "t"})
+	require.NoError(t, err)
+	assert.Contains(t, got, `src="`+outPath+`"`)
+	assert.NotContains(t, got, "private bytes")
+	assert.NotContains(t, got, "base64")
+	assert.Equal(t, []ImageDiagnostic{{Code: DiagnosticImageOutsideRoot, Destination: outPath}}, diagnostics)
+	assert.Empty(t, ImageDependencyFingerprint(src, baseDir))
+}
+
+func TestInlineImage_RejectsSymlinkEscapesWithFingerprintParity(t *testing.T) {
+	t.Parallel()
+
+	parent := t.TempDir()
+	baseDir := filepath.Join(parent, "docs")
+	outsideDir := filepath.Join(parent, "private")
+	require.NoError(t, os.Mkdir(baseDir, 0o755))
+	require.NoError(t, os.Mkdir(outsideDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(outsideDir, "outside.png"), []byte("private bytes"), 0o644))
+	require.NoError(t, os.Symlink(outsideDir, filepath.Join(baseDir, "linked")))
+
+	src := []byte("![outside](linked/outside.png)\n")
+	got, diagnostics, err := RenderWithDiagnostics(src, Options{SourceDir: baseDir, FallbackTitle: "t"})
+	require.NoError(t, err)
+	assert.Contains(t, got, `src="linked/outside.png"`)
+	assert.NotContains(t, got, "private bytes")
+	assert.Equal(t, []ImageDiagnostic{{Code: DiagnosticImageOutsideRoot, Destination: "linked/outside.png"}}, diagnostics)
+	assert.Empty(t, ImageDependencyFingerprint(src, baseDir))
+}
+
 func TestSafeImagesBecomeNonFetchingPlaceholders(t *testing.T) {
 	t.Parallel()
 

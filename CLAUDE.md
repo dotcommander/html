@@ -57,10 +57,12 @@ cmd/html/main.go            entrypoint (<20 lines), prints errors with "html:" p
   └─ internal/cli/root.go   standard flag wiring, metadata paths, and argument normalization
        └─ internal/actions/run.go   orchestration (stat → cache check → render → open)
             ├─ internal/cache/cache.go    cache key, freshness, atomic write
-            └─ internal/render/
+            ├─ internal/render/
                  ├─ render.go   goldmark GFM pipeline + h1 title extraction
+                 ├─ report*.go report layouts and semantic component rendering
                  ├─ page.go     chroma CSS generation + HTML5 wrapper
                  └─ embed.go    //go:embed assets/base.css + assets/copy.js
+            └─ internal/report/ analysis, report planning, and shared report types
 ```
 
 **`actions.Run`** is the orchestrator: it validates and reads the source through
@@ -68,7 +70,7 @@ cmd/html/main.go            entrypoint (<20 lines), prints errors with "html:" p
 and atomically writes the cache or stable output. It opens the result unless
 `--no-open`. The fallback title is the source basename without extension.
 
-**`render.Render(src, fallbackTitle)`** uses a package-level `goldmark` singleton (`render.go`) built once at init. Then `wrapPage` inlines everything — `baseCSS()` + generated chroma CSS into one `<style>`, `copyJS()` into one `<script>` — producing a zero-external-resource document.
+**`render.Render(src, opts)`** parses once through a package-level `goldmark` singleton (`render.go`), then walks that AST for title and heading metadata. `wrapPage` inlines everything — `baseCSS()` + generated chroma CSS into one `<style>`, `copyJS()` into one `<script>` — producing a zero-external-resource document. Report mode analyzes and plans through `internal/report/`, then renders semantic components through `internal/render/report*.go`.
 
 ### Load-bearing design decisions (and where they live)
 
@@ -79,11 +81,11 @@ and atomically writes the cache or stable output. It opens the result unless
 - **Atomic cache writes** — `cache.Write` writes to a temp file in the cache dir, then `os.Rename`s into place; a concurrent reader never sees a partial file. Cache dir is `~/.config/html/cache/` (deliberately *not* `os.UserCacheDir()`).
 - **Cache key = `sha256(EvalSymlinks(Abs(path)))`** in `cache.PathFor` — symlinks and `../`-relative spellings of the same file collapse to one key. Falls back to `Abs` if `EvalSymlinks` errors. Stdin sources are keyed by `sha256(content)` (`cache.PathForContent`) instead — identical piped output reuses one entry.
 - **Freshness = `cacheMtime >= srcMtime`** in `cache.Fresh`; a missing cache file returns `false, nil` (not an error).
-- **Class-based syntax highlighting** — chroma is configured with `WithClasses(true)`, not inline styles, so themes are switchable via CSS. `page.go` generates CSS for both `github` (light) and `github-dark` themes; the dark CSS is scoped under `:root[data-theme="dark"]` and the whole thing is memoized with `sync.OnceValue` (generated once per process).
+- **Class-based syntax highlighting** — chroma is configured with `WithClasses(true)`, not inline styles, so themes are switchable via CSS. `page.go` generates CSS for both light and dark themes; the dark CSS is scoped under `:root[data-theme="dark"]` and each theme pair is memoized in a `sync.Map`.
 - **GFM enabled** via `extension.GFM` — bundles Tables, Strikethrough, TaskList, and Linkify together; to toggle one you must decompose GFM into its constituent extensions.
 - **Raw HTML passthrough** — enabled by default for local trusted input, but can be disabled with `--safe` (which builds goldmark without `goldmarkhtml.WithUnsafe()`, see comment at `render.go`). Do not point this tool at untrusted Markdown unless `--safe`.
-- **Image inlining + self-containment boundary** — `imageInliner` (`images.go`) is a goldmark AST transformer (`render.go:39`) that rewrites local `![](./img)` destinations to base64 `data:` URIs, so a *file*-rendered document carries its images inline (≤10 MiB each; remote/`data:`/unknown-type/missing/oversize refs are left untouched — inlining never fails a render). "Self-contained / zero-external-resource" scopes to **render-time resources** — CSS, JS, and these images load with zero network requests; it deliberately does **not** rewrite hyperlinks: a relative `[](./page)` stays as authored `href="./page"` (a navigation target, not a loaded resource — dead-on-click when opened from the cache dir, since a linked page can't be embedded). Two boundaries follow: stdin Markdown has no base directory (`Options.SourceDir == ""`), so its local image refs stay external (inlining is skipped, `run.go`); and a referenced image's bytes/size/presence feed `ImageDependencyFingerprint` so editing or adding the file invalidates the cache.
-- **Title extraction** re-parses the source AST to find the first `<h1>`, collecting only `*ast.Text` children (inline HTML/emphasis inside the heading is dropped). This is a *second* parse — `md.Convert` already parsed once; the first AST is discarded.
+- **Image inlining + self-containment boundary** — `imageInliner` (`images.go`) is a goldmark AST transformer that rewrites local `![](./img)` destinations to base64 `data:` URIs, so a *file*-rendered document carries its images inline (≤10 MiB each; remote/`data:`/unknown-type/missing/oversize refs are left untouched — inlining never fails a render). Relative traversal, absolute outside paths, and symlinks that resolve outside `Options.SourceDir` are also left external; rendering and `ImageDependencyFingerprint` share this containment resolver. "Self-contained / zero-external-resource" scopes to **render-time resources** — CSS, JS, and these images load with zero network requests; it deliberately does **not** rewrite hyperlinks: a relative `[](./page)` stays as authored `href="./page"` (a navigation target, not a loaded resource — dead-on-click when opened from the cache dir, since a linked page can't be embedded). Stdin Markdown has no base directory (`Options.SourceDir == ""`), so its local image refs stay external (inlining is skipped, `run.go`); referenced in-tree image bytes/size/presence feed the dependency fingerprint so editing or adding the file invalidates the cache.
+- **Title extraction** walks the same parsed AST that is rendered, selecting the first `<h1>` and flattening its `*ast.Text` and `*ast.String` descendants. Emphasis, code, and link markup contribute their text; raw inline HTML is dropped.
 
 ### Gotchas
 
