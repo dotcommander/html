@@ -28,7 +28,7 @@ func highlightCSS(codeTheme string) string {
 }
 
 func buildHighlightCSS(codeTheme string) string {
-	formatter := chromahtml.New(chromahtml.WithClasses(true))
+	formatter := chromahtml.New(chromahtml.WithClasses(true), chromahtml.WithModeClasses(true))
 
 	lightStyle := styles.Get("github")
 	darkStyle := styles.Get("github-dark")

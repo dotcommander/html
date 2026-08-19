@@ -30,7 +30,7 @@ func newMarkdownWithImageLimit(unsafe bool, codeTheme string, imageLimit int64, 
 	highlightOpts := []highlighting.Option{
 		// WithClasses emits CSS class names (e.g. .chroma .k) rather than
 		// inline styles, so highlightCSS controls colors and dark mode works.
-		highlighting.WithFormatOptions(chromahtml.WithClasses(true)),
+		highlighting.WithFormatOptions(chromahtml.WithClasses(true), chromahtml.WithModeClasses(true)),
 	}
 	if ValidCodeTheme(codeTheme) {
 		style := codeTheme

@@ -137,16 +137,15 @@ func looksLikeProseLine(line string) bool {
 
 // highlightCode renders source with the given chroma lexer using the same class-
 // based formatter and code theme as the Markdown code path, so the existing
-// highlightCSS styles it identically. chroma emits `<pre class="chroma light">`,
-// which highlightCSS targets for both light (.chroma) and dark (.chroma.light,
-// scoped under data-theme=dark) themes — no post-processing needed.
+// highlightCSS styles it identically. Mode classes keep the light wrapper
+// explicit so the page can switch to its scoped dark palette at runtime.
 func highlightCode(source string, lexer chroma.Lexer, codeTheme string) (string, error) {
 	lexer = chroma.Coalesce(lexer)
 	iterator, err := lexer.Tokenise(nil, source)
 	if err != nil {
 		return "", err
 	}
-	formatter := chromahtml.New(chromahtml.WithClasses(true))
+	formatter := chromahtml.New(chromahtml.WithClasses(true), chromahtml.WithModeClasses(true))
 	style := styles.Get("github")
 	if ValidCodeTheme(codeTheme) && codeTheme != "" {
 		style = styles.Get(codeTheme)
