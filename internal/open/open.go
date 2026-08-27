@@ -20,13 +20,17 @@ func Open(path, command string) error {
 	switch runtime.GOOS {
 	case "windows":
 		// `cmd /c start "" <path>` — the empty "" is the (required) window title.
-		return exec.Command("cmd", "/c", "start", "", path).Start()
+		//nolint:gosec,noctx // Fixed launcher; the detached browser must outlive this call.
+		_, err := start(exec.Command("cmd", "/c", "start", "", path))
+		return err
 	case "darwin":
 		return launch("open", path)
 	default:
 		// Linux/BSD: prefer xdg-open, fall back to a stray `open` if present.
 		if bin, err := exec.LookPath("xdg-open"); err == nil {
-			return exec.Command(bin, path).Start()
+			//nolint:gosec,noctx // Resolved launcher; the detached browser must outlive this call.
+			_, err := start(exec.Command(bin, path))
+			return err
 		}
 		return launch("open", path)
 	}
@@ -38,5 +42,21 @@ func launch(opener, path string) error {
 	if err != nil {
 		return fmt.Errorf("open: no %q launcher found on PATH: %w", opener, err)
 	}
-	return exec.Command(bin, path).Start()
+	//nolint:gosec,noctx // Resolved launcher; the detached browser must outlive this call.
+	_, err = start(exec.Command(bin, path))
+	return err
+}
+
+// start launches cmd and reaps it asynchronously. The returned channel closes
+// after Wait releases the child process resources.
+func start(cmd *exec.Cmd) (<-chan struct{}, error) {
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+	done := make(chan struct{})
+	go func() {
+		_ = cmd.Wait()
+		close(done)
+	}()
+	return done, nil
 }
