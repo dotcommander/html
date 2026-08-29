@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.2.2 - 2026-08-29
+
+### Fixes
+
+- Reap detached launcher processes on open.
+
 ## v0.2.1 - 2026-07-16
 
 ### Quality
