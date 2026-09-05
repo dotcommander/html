@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/yuin/goldmark/ast"
@@ -53,23 +52,8 @@ func ImageDependencyFingerprint(src []byte, baseDir string) string {
 }
 
 func imageDependencyState(baseDir, dest string) (string, bool) {
-	if dest == "" || strings.HasPrefix(dest, "data:") ||
-		strings.HasPrefix(dest, "//") || strings.Contains(dest, "://") {
-		return "", false
-	}
-	clean := dest
-	if i := strings.IndexAny(clean, "?#"); i >= 0 {
-		clean = clean[:i]
-	}
-	if clean == "" {
-		return "", false
-	}
-	clean = imageFilesystemPath(clean)
-	if _, ok := mimeByExt[strings.ToLower(filepath.Ext(clean))]; !ok {
-		return "", false
-	}
-	abs, contained, err := containedImagePath(baseDir, clean)
-	if err != nil || !contained {
+	abs, _, _, ok := classifyInlineImagePath(baseDir, dest)
+	if !ok {
 		return "", false
 	}
 	resolved := abs

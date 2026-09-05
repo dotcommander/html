@@ -55,6 +55,39 @@ func TestInlineImage_PercentEncodedLocalPath(t *testing.T) {
 	assert.NotEqual(t, fpBefore, ImageDependencyFingerprint(src, tmp))
 }
 
+func TestImageDependencyFingerprintMatchesInlineImageEligibility(t *testing.T) {
+	t.Parallel()
+
+	parent := t.TempDir()
+	baseDir := filepath.Join(parent, "docs")
+	require.NoError(t, os.Mkdir(baseDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(baseDir, "local image.png"), []byte("png bytes"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(parent, "outside.png"), []byte("private bytes"), 0o644))
+
+	for _, tt := range []struct {
+		name     string
+		dest     string
+		eligible bool
+	}{
+		{name: "local-with-query-fragment", dest: "local%20image.png?version=1#top", eligible: true},
+		{name: "missing-local", dest: "missing.png", eligible: true},
+		{name: "data", dest: "data:image/png;base64,AA=="},
+		{name: "remote", dest: "https://example.com/image.png"},
+		{name: "scheme-relative", dest: "//example.com/image.png"},
+		{name: "empty", dest: ""},
+		{name: "unsupported", dest: "image.txt"},
+		{name: "outside-root", dest: "../outside.png"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _, _, ok := classifyInlineImagePath(baseDir, tt.dest)
+			assert.Equal(t, tt.eligible, ok)
+
+			src := []byte("![image](" + tt.dest + ")\n")
+			assert.Equal(t, tt.eligible, ImageDependencyFingerprint(src, baseDir) != "")
+		})
+	}
+}
+
 func TestInlineImage_LocalSVG(t *testing.T) {
 	t.Parallel()
 
