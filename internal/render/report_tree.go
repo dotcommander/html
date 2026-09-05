@@ -176,19 +176,6 @@ func isASCIILetter(b byte) bool {
 	return b >= 'A' && b <= 'Z' || b >= 'a' && b <= 'z'
 }
 
-func extractArticle(doc string) string {
-	start := strings.Index(doc, `<article class="markdown-body">`)
-	if start < 0 {
-		return doc
-	}
-	start += len(`<article class="markdown-body">`)
-	end := strings.LastIndex(doc, `</article>`)
-	if end <= start {
-		return doc
-	}
-	return doc[start:end]
-}
-
 func sortedStringKeys(m map[string]bool) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {

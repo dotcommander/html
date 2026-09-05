@@ -9,7 +9,7 @@ import (
 func TestRenderSchemaVersion(t *testing.T) {
 	t.Parallel()
 
-	assert.Equal(t, "58", renderSchemaVersion)
+	assert.Equal(t, "59", renderSchemaVersion)
 }
 
 func TestFingerprintIncludesTitleAndSourceName(t *testing.T) {

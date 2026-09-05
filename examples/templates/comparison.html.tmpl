@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>{{.Head}}
+<style>
+  .comparison { max-width: 76rem; margin: 6rem auto 3rem; padding: 0 1.5rem; }
+  .comparison header { border-bottom: 3px solid var(--accent); padding-bottom: 2rem; margin-bottom: 2rem; }
+  .comparison h1 { font: 500 clamp(2.25rem, 5vw, 4rem)/1.1 var(--font-body); letter-spacing: -0.035em; margin: 0.75rem 0; }
+  .comparison header p { color: var(--muted); line-height: 1.7; }
+  .comparison-label { font: 700 0.75rem var(--font-sans); letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
+  .comparison-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 6px; background: var(--paper); }
+  .comparison table { border-collapse: collapse; min-width: 42rem; width: 100%; text-align: left; }
+  .comparison th, .comparison td { padding: 1.25rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .comparison th { font: 600 0.8rem var(--font-sans); color: var(--muted); }
+  .comparison tbody th { width: 35%; font: 500 1.15rem var(--font-body); }
+  .comparison tbody th p { font: 0.9rem/1.7 var(--font-sans); color: var(--muted); margin-bottom: 0; }
+  .comparison a { color: var(--link); }
+  .comparison .availability { font: 0.8rem/1.6 var(--font-sans); }
+  .comparison caption { text-align: left; padding: 1.25rem; font: 700 0.75rem var(--font-sans); text-transform: uppercase; background: var(--panel-bg); }
+  @media print { .comparison { margin: 0; padding: 0; } .comparison table { min-width: 0; } .comparison th, .comparison td { padding: 0.5rem; } }
+</style>
+</head>
+<body data-example="comparison">
+  {{.Controls}}
+  <main class="comparison">
+    <header><span class="comparison-label">Side by side</span><h1>{{.Data.title}}</h1><p>{{.Data.subtitle}}</p></header>
+    <div class="comparison-scroll" role="region" aria-label="Equipment comparison" tabindex="0">
+      <table>
+        <caption>{{len .Data.items}} options at a glance</caption>
+        <thead><tr><th scope="col">Equipment</th><th scope="col">Weight</th><th scope="col">Runtime</th><th scope="col">Price</th><th scope="col">Availability</th></tr></thead>
+        <tbody>{{range .Data.items}}<tr><th scope="row"><a href="{{.url}}">{{.name}}</a><p>{{.summary}}</p></th><td>{{.specs.weight}}</td><td>{{.specs.runtime}}</td><td>${{.price}}</td><td class="availability">{{if .available}}Available{{else}}Coming soon{{end}}</td></tr>{{else}}<tr><td colspan="5">No equipment in this collection.</td></tr>{{end}}</tbody>
+      </table>
+    </div>
+  </main>
+  {{.Scripts}}
+</body>
+</html>

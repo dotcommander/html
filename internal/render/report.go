@@ -16,6 +16,9 @@ import (
 var utf8BOM = []byte{0xef, 0xbb, 0xbf}
 
 func RenderReport(src []byte, opts Options, analysis report.Analysis, plan report.ReportPlan) (string, error) {
+	if err := ValidateTemplateMode(opts, true); err != nil {
+		return "", err
+	}
 	if err := report.ValidateComponentSources(src, plan.Components); err != nil {
 		// Semantic plans are cacheable, so their byte ranges can become stale.
 		// Preserve the established article renderer instead of rendering the
@@ -28,7 +31,7 @@ func RenderReport(src []byte, opts Options, analysis report.Analysis, plan repor
 	if err != nil {
 		return "", err
 	}
-	return wrapPage(title, body, opts), nil
+	return assemblePage(documentFragment{escapedTitle: title, body: body}, src, opts)
 }
 
 func reportTitle(src []byte, opts Options, analysis report.Analysis) string {

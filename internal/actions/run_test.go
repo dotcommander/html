@@ -180,6 +180,114 @@ func TestRun_CachedReportRebasesRelativeLinks(t *testing.T) {
 	assert.Contains(t, readRenderedFile(t, res.Path), `href="`+want+`"`)
 }
 
+func TestRun_CacheRoutesBySourceAcrossRenderers(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		name   string
+		report bool
+		stdin  bool
+	}{
+		{name: "document-file"},
+		{name: "document-stdin", stdin: true},
+		{name: "report-file", report: true},
+		{name: "report-stdin", report: true, stdin: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			content := "# " + tt.name + "\n\nBody\n"
+			source := filepath.Join(t.TempDir(), tt.name+".md")
+			require.NoError(t, os.WriteFile(source, []byte(content), 0o644))
+
+			opts := Options{NoOpen: true, Report: tt.report, Planner: report.PlannerOff}
+			var wantPath string
+			var err error
+			if tt.stdin {
+				opts.Stdin = strings.NewReader(content)
+				wantPath, err = cache.PathForContent([]byte(content))
+			} else {
+				opts.File = source
+				wantPath, err = cache.PathFor(source)
+			}
+			require.NoError(t, err)
+			t.Cleanup(func() {
+				_ = os.Remove(wantPath)
+				_ = os.Remove(strings.TrimSuffix(wantPath, ".html") + ".fp")
+			})
+
+			run := func(force bool) Result {
+				opts.Force = force
+				if tt.stdin {
+					opts.Stdin = strings.NewReader(content)
+				}
+				res, err := RunWithResult(opts)
+				require.NoError(t, err)
+				return res
+			}
+
+			for _, force := range []bool{true, false} {
+				res := run(force)
+				assert.Equal(t, wantPath, res.Path)
+				assert.Empty(t, res.Stdout)
+				assert.Contains(t, readRenderedFile(t, res.Path), "<!DOCTYPE html>")
+			}
+		})
+	}
+}
+
+func TestRun_OpenFailurePreservesPublishedResultAcrossFlows(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		name   string
+		report bool
+		output bool
+	}{
+		{name: "cached-document"},
+		{name: "cached-report", report: true},
+		{name: "explicit-output", output: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			dir := t.TempDir()
+			source := filepath.Join(dir, tt.name+".md")
+			require.NoError(t, os.WriteFile(source, []byte("# Source\n\n![missing](missing.png)\n"), 0o644))
+
+			opts := Options{
+				File:    source,
+				Report:  tt.report,
+				Planner: report.PlannerOff,
+				OpenCmd: filepath.Join(dir, "missing-launcher"),
+			}
+			var wantPath string
+			var err error
+			if tt.output {
+				wantPath = filepath.Join(dir, "output.html")
+				opts.Output = wantPath
+			} else {
+				wantPath, err = cache.PathFor(source)
+				require.NoError(t, err)
+				t.Cleanup(func() {
+					_ = os.Remove(wantPath)
+					_ = os.Remove(strings.TrimSuffix(wantPath, ".html") + ".fp")
+				})
+			}
+
+			res, err := RunWithResult(opts)
+			require.ErrorContains(t, err, "open browser:")
+			assert.Equal(t, wantPath, res.Path)
+			assert.Equal(t, []render.ImageDiagnostic{{
+				Code:        render.DiagnosticImageMissing,
+				Destination: "missing.png",
+			}}, res.Diagnostics)
+			_, statErr := os.Stat(res.Path)
+			require.NoError(t, statErr)
+		})
+	}
+}
+
 func TestRun_OutputIncludesConfiguredPalette(t *testing.T) {
 	t.Parallel()
 
@@ -356,6 +464,35 @@ func TestRun_OutputUsesStableMode(t *testing.T) {
 	info, err := os.Stat(output)
 	require.NoError(t, err)
 	assert.Equal(t, os.FileMode(0o644), info.Mode()&0o777)
+}
+
+func TestRun_ExplicitOutputLifecycleAcrossRenderers(t *testing.T) {
+	t.Parallel()
+
+	for _, reportMode := range []bool{false, true} {
+		reportMode := reportMode
+		name := "document"
+		if reportMode {
+			name = "report"
+		}
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			output := filepath.Join(t.TempDir(), "output.html")
+			res, err := RunWithResult(Options{
+				Stdin:   strings.NewReader("# Source\n\nBody\n"),
+				Output:  output,
+				Report:  reportMode,
+				Planner: report.PlannerOff,
+				NoOpen:  true,
+			})
+			require.NoError(t, err)
+			assert.Equal(t, output, res.Path)
+			assert.Empty(t, res.Stdout)
+			body, readErr := os.ReadFile(output)
+			require.NoError(t, readErr)
+			assert.Contains(t, string(body), "Source")
+		})
+	}
 }
 
 func TestRun_RejectsUnknownCodeTheme(t *testing.T) {

@@ -58,6 +58,7 @@ Plain text and stdin have no local-image base directory.
 | `-l`, `--lang <lang>` | syntax-highlight language for plain mode (`go`, `json`; `text` = none) |
 | `--frame` | wrap plain/ANSI output in a terminal-window frame, implies `--plain` (share-ready "screenshot") |
 | `--safe` | disable raw-HTML passthrough — use for untrusted Markdown |
+| `--template <selector>` | page presentation: `default`, `reader`, `notebook`, or a local Go HTML template file |
 | `--version` | print the release version (`html devel` for local builds) |
 
 Run `html --help` for the full list, including the report-mode flags (`--mode`, `--layout`).
@@ -88,8 +89,92 @@ output and `--safe` mode preserve links as written.
 
 Cache validity includes the source bytes, not only modification times. Cache
 directories are private to the current user. Stable outputs are written
-atomically, and `--output` refuses to overwrite the input through the same path,
-a symlink, or a hardlink.
+atomically, and `--output` refuses to overwrite the input or selected template
+through the same path, a symlink, or a hardlink. Template selection, source bytes,
+and the template-contract version participate in cache freshness; editing a
+template invalidates the cached page even when its input is unchanged.
+Cache metadata also binds the page bytes, so interrupted or interleaved template
+writes are treated as stale instead of reusing a mismatched page.
+
+## Page templates
+
+Omitting `--template` (or selecting `default`) preserves the existing page.
+`reader` adds a paper-like article with a sticky contents column on wide screens.
+`notebook` presents top-level Markdown alerts in the margin. Consecutive and tall
+notes reserve their own space without moving or duplicating source content;
+nested alerts stay with their enclosing block. Contents and notes return inline
+on narrow screens and in print. Both layouts retain appearance controls, code
+highlighting, copy buttons, heading links, and existing TOC settings.
+
+```bash
+html --template reader -n notes.md
+html --template notebook -n notes.md
+html --template ./page.html.tmpl -o page.html notes.md
+```
+
+The two reading layouts require ordinary Markdown. Use `-m` when forcing Markdown
+for stdin or another extension. Plain/framed modes and report composition are
+incompatible with them. `--layout` still selects report composition independently
+of page presentation. Custom templates can wrap Markdown, plain/framed output,
+and reports. Explicit `--template` is incompatible with `--plan`.
+
+Any other selector is a template file resolved from the working directory. Use
+`./reader` for a file named `reader`. Templates own the complete document and
+choose which of these slots to include:
+
+| Slot | Value |
+| --- | --- |
+| `.Title` | Ordinary text, automatically escaped |
+| `.Content` | Rendered body HTML, including framing when selected |
+| `.TOC` | Optional Markdown navigation, respecting TOC settings |
+| `.Data` | One complete decoded JSON value, or nil for non-JSON input |
+| `.Head` | Complete head contents: title, embedded CSS, pre-paint theme script |
+| `.Controls` | Existing appearance controls |
+| `.Scripts` | Existing copy, heading-link, and report behavior scripts |
+
+For example, a complete minimal wrapper is:
+
+```gotemplate
+<!DOCTYPE html>
+<html lang="en">
+<head>{{.Head}}</head>
+<body>
+  {{.Controls}}
+  <article class="markdown-body">{{.TOC}}{{.Content}}</article>
+  {{.Scripts}}
+</body>
+</html>
+```
+
+Ordinary Markdown `.Content` excludes the separately supplied TOC. Report-internal
+navigation stays inside `.Content`; reports have no separate `.TOC`. Preserve the
+`markdown-body` class when using the embedded article styling and heading links.
+Omitting `.Head`, `.Controls`, or `.Scripts` also omits the features in that slot.
+
+Templates use standard-library `html/template`, including loops, conditionals,
+and inline `{{define}}`/`{{template}}` blocks. Missing map keys fail execution.
+There are no filesystem includes, network access, command execution, or arbitrary
+HTML-trust functions. JSON numbers retain their original precision, and values
+are contextually escaped. Input must contain exactly one JSON value, not JSONL
+or JSON followed by other text; use `.Data` to render data independently of
+`.Content`.
+
+Template authors are trusted. `--safe` protects Markdown input and image handling;
+it does not sandbox an explicitly selected template. A template can itself emit
+active HTML or external resources. External template source is read once per
+invocation and limited to 1 MiB. Custom output is limited to 64 MiB. Parsing and
+execution finish before stdout, an output file, or cached HTML is published, so
+template errors cannot publish partial pages or replace existing output.
+
+The [template examples](examples/templates/) contain two complete presentations
+and two compatible datasets. All four combinations work without Go changes:
+
+```bash
+html --template examples/templates/catalog.html.tmpl -o catalog-instruments.html examples/templates/instruments.json
+html --template examples/templates/catalog.html.tmpl -o catalog-field-kits.html examples/templates/field-kits.json
+html --template examples/templates/comparison.html.tmpl -o comparison-instruments.html examples/templates/instruments.json
+html --template examples/templates/comparison.html.tmpl -o comparison-field-kits.html examples/templates/field-kits.json
+```
 
 ## Reports and optional planning
 

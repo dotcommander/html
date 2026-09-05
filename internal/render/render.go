@@ -2,6 +2,7 @@ package render
 
 import (
 	"bytes"
+	htmlpkg "html"
 	"strings"
 
 	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
@@ -96,9 +97,22 @@ func Render(src []byte, opts Options) (string, error) {
 // and reason. Plain and safe rendering return no diagnostics; safe mode retains
 // its no-filesystem-I/O guarantee.
 func RenderWithDiagnostics(src []byte, opts Options) (string, []ImageDiagnostic, error) {
-	if opts.Plain {
-		return renderPlain(src, opts), nil, nil
+	if err := ValidateTemplateMode(opts, false); err != nil {
+		return "", nil, err
 	}
+	if opts.Plain {
+		page, err := assemblePage(documentFragment{escapedTitle: htmlpkg.EscapeString(opts.FallbackTitle), body: renderPlain(src, opts)}, src, opts)
+		return page, nil, err
+	}
+	fragment, diagnostics, err := renderMarkdownFragment(src, opts)
+	if err != nil {
+		return "", diagnostics, err
+	}
+	page, err := assemblePage(fragment, src, opts)
+	return page, diagnostics, err
+}
+
+func renderMarkdownFragment(src []byte, opts Options) (documentFragment, []ImageDiagnostic, error) {
 	md := mdUnsafe
 	switch {
 	case len(opts.semanticLists) > 0:
@@ -116,7 +130,7 @@ func RenderWithDiagnostics(src []byte, opts Options) (string, []ImageDiagnostic,
 	doc := md.Parser().Parse(text.NewReader(src), parser.WithContext(pc))
 	var buf bytes.Buffer
 	if err := md.Renderer().Render(&buf, src, doc); err != nil {
-		return "", nil, err
+		return documentFragment{}, nil, err
 	}
 	title, fromHeading, headings := analyze(doc, src, opts.FallbackTitle)
 	content := buf.String()
@@ -128,14 +142,11 @@ func RenderWithDiagnostics(src []byte, opts Options) (string, []ImageDiagnostic,
 		// h1 are left untouched. title is already HTML-escaped.
 		content = "<h1>" + title + "</h1>\n" + content
 	}
+	fragment := documentFragment{escapedTitle: title, body: content}
 	if shouldRenderTOC(opts.TOC, len(headings)) {
-		if toc := buildTOC(headings); toc != "" {
-			// Place the TOC just after the first heading so navigation sits below
-			// the document's title rather than above it.
-			content = insertAfterFirstH1(content, toc)
-		}
+		fragment.toc = buildTOC(headings)
 	}
-	return wrapPage(title, content, opts), imageDiagnostics(pc), nil
+	return fragment, imageDiagnostics(pc), nil
 }
 
 // ImageDiagnostics returns the image diagnostics for a Markdown render without

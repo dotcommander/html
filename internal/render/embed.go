@@ -2,7 +2,7 @@ package render
 
 import "embed"
 
-//go:embed assets/base.css assets/alerts.css assets/copy.js assets/theme.js assets/headings.js assets/report.js assets/frame.css
+//go:embed assets/base.css assets/alerts.css assets/copy.js assets/theme.js assets/headings.js assets/report.js assets/frame.css assets/reading.css assets/reader.html.tmpl assets/notebook.html.tmpl
 var assetsFS embed.FS
 
 func baseCSS() string    { return mustReadAsset("assets/base.css") }

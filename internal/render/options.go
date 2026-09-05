@@ -1,6 +1,8 @@
 package render
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -9,6 +11,11 @@ import (
 
 // Options controls a single Render call.
 type Options struct {
+	// Template selects default, reader, notebook, or a caller-loaded custom page.
+	Template string
+	// TemplateSource contains trusted custom template text. File loading belongs
+	// to the caller; the renderer never discovers or includes template files.
+	TemplateSource string
 	// FallbackTitle is used for <title> when the document has no level-1
 	// heading (typically the source filename without extension).
 	FallbackTitle string
@@ -69,6 +76,13 @@ type Options struct {
 // here. Extend this when adding a new output-affecting option.
 func (o Options) cacheTag() string {
 	var b strings.Builder
+	appendCacheTag(&b, "template-contract", TemplateContractVersion)
+	selector := o.Template
+	if selector == "" {
+		selector = "default"
+	}
+	appendCacheTag(&b, "template", selector)
+	appendCacheTag(&b, "template-source", fmt.Sprintf("%x", sha256.Sum256([]byte(o.TemplateSource))))
 	if o.Safe {
 		b.WriteString("+safe")
 	}

@@ -44,29 +44,45 @@ func readInput(opts Options) (src []byte, fallbackTitle, sourceName string, err 
 }
 
 func rejectOutputAlias(opts Options) error {
-	if opts.Stdin != nil || opts.File == "" || opts.Output == "" || opts.Output == "-" || opts.Stdout {
+	if opts.Output == "" || opts.Output == "-" || opts.Stdout {
 		return nil
-	}
-	inputPath, err := filepath.Abs(opts.File)
-	if err != nil {
-		return fmt.Errorf("source path: %w", err)
 	}
 	outputPath, err := filepath.Abs(opts.Output)
 	if err != nil {
 		return fmt.Errorf("output path: %w", err)
 	}
-	if filepath.Clean(inputPath) == filepath.Clean(outputPath) {
-		return errors.New("output path aliases source file")
+	if opts.Stdin == nil && opts.File != "" {
+		if err := rejectPathAlias(outputPath, opts.File, nil, "source file"); err != nil {
+			return err
+		}
+	}
+	if opts.templatePath != "" {
+		if err := rejectPathAlias(outputPath, opts.templatePath, opts.templateInfo, "template file"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func rejectPathAlias(outputPath, sourcePath string, sourceInfo os.FileInfo, label string) error {
+	sourcePathAbs, err := filepath.Abs(sourcePath)
+	if err != nil {
+		return fmt.Errorf("%s path: %w", label, err)
+	}
+	if filepath.Clean(sourcePathAbs) == filepath.Clean(outputPath) {
+		return fmt.Errorf("output path aliases %s", label)
 	}
 
-	inputInfo, err := os.Stat(opts.File)
-	if err != nil {
-		return fmt.Errorf("source file: %w", err)
+	if sourceInfo == nil {
+		sourceInfo, err = os.Stat(sourcePath)
+		if err != nil {
+			return fmt.Errorf("%s: %w", label, err)
+		}
 	}
-	outputInfo, err := os.Stat(opts.Output)
+	outputInfo, err := os.Stat(outputPath)
 	if err == nil {
-		if os.SameFile(inputInfo, outputInfo) {
-			return errors.New("output path aliases source file")
+		if os.SameFile(sourceInfo, outputInfo) {
+			return fmt.Errorf("output path aliases %s", label)
 		}
 		return nil
 	}
@@ -107,6 +123,3 @@ type reportCacheAnalysis struct {
 	Reasons    []string     `json:"reasons"`
 	Stats      report.Stats `json:"stats"`
 }
-
-// renderFile renders a source file. Mode is decided by extension/flags without
-// reading the file, so a fresh cache hit returns immediately without a read.

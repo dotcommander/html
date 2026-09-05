@@ -1,0 +1,9 @@
+{
+  "title": "Instruments for a closer look",
+  "subtitle": "A small collection for observing the landscape. Illustrative equipment and prices for template examples.",
+  "items": [
+    {"name": "Pocket Compass", "category": "Navigation", "summary": "A simple baseplate compass with a clear scale and a steady needle.", "price": 35, "available": true, "specs": {"weight": "42 g", "runtime": "No battery"}, "url": "https://example.com/compass"},
+    {"name": "Trail Recorder", "category": "Sound", "summary": "Capture birdsong and spoken observations with a pocket stereo recorder.", "price": 149, "available": true, "specs": {"weight": "120 g", "runtime": "18 hours"}, "url": "https://example.com/recorder"},
+    {"name": "Survey Lens", "category": "Optics", "summary": "A folding hand lens for identifying minerals, leaves, and small details.", "price": 58, "available": false, "specs": {"weight": "65 g", "runtime": "No battery"}, "url": "https://example.com/lens"}
+  ]
+}

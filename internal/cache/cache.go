@@ -102,8 +102,7 @@ func freshAt(cachePath string, notBefore time.Time, wantFP string) (bool, error)
 		return false, nil
 	}
 	// Stale if the renderer fingerprint changed (assets/schema/highlight CSS).
-	gotFP, _ := os.ReadFile(fpPath(cachePath)) // missing sidecar => "" (mismatch unless wantFP is "")
-	return string(gotFP) == wantFP, nil
+	return matchesPublication(cachePath, wantFP)
 }
 
 // tightenExisting upgrades cache artifacts created by older releases before
@@ -164,6 +163,12 @@ func fpPath(htmlPath string) string {
 	return strings.TrimSuffix(htmlPath, ".html") + ".fp"
 }
 
+// PublicationPaths names every destination written for a cached page, allowing
+// callers to reject aliases with caller-owned inputs before any cache mutation.
+func PublicationPaths(htmlPath string) []string {
+	return []string{htmlPath, fpPath(htmlPath)}
+}
+
 // maxCacheAge bounds how long a rendered cache file is kept. On every Write,
 // entries older than this are opportunistically removed (no background GC, no
 // manifest). Set <= 0 to disable pruning.
@@ -214,13 +219,13 @@ func prepareDir() (string, error) {
 	return d, nil
 }
 
-// writeAt atomically writes html and its fingerprint sidecar next to finalPath
-// (temp file + rename, so a concurrent reader never observes a partial file).
+// writeAt atomically replaces each artifact. Their digest binding lets freshness
+// reject mixed pairs after interrupted or interleaved writes of different pages.
 func writeAt(finalPath, html, fingerprint string) error {
 	if err := atomicfile.Write(finalPath, []byte(html), 0o600); err != nil {
 		return fmt.Errorf("cache: write html: %w", err)
 	}
-	if err := atomicfile.Write(fpPath(finalPath), []byte(fingerprint), 0o600); err != nil {
+	if err := atomicfile.Write(fpPath(finalPath), []byte(publicationFingerprint([]byte(html), fingerprint)), 0o600); err != nil {
 		return fmt.Errorf("cache: write fingerprint: %w", err)
 	}
 	return nil

@@ -1,0 +1,9 @@
+{
+  "title": "Pack for the day ahead",
+  "subtitle": "Three kits for different kinds of fieldwork. Illustrative equipment and prices for template examples.",
+  "items": [
+    {"name": "Day Survey", "category": "Essentials", "summary": "Notebook, measuring tape, compass, and a weatherproof pouch for short surveys.", "price": 85, "available": true, "specs": {"weight": "480 g", "runtime": "No battery"}, "url": "https://example.com/day-kit"},
+    {"name": "Evening Watch", "category": "After dark", "summary": "A warm headlamp, spare power, and reflective markers for twilight observations.", "price": 129, "available": false, "specs": {"weight": "620 g", "runtime": "12 hours"}, "url": "https://example.com/evening-kit"},
+    {"name": "Remote Station", "category": "Extended stay", "summary": "A compact sensor, recorder, and solar supply for a longer observation window.", "price": 340, "available": true, "specs": {"weight": "1.4 kg", "runtime": "72 hours"}, "url": "https://example.com/remote-kit"}
+  ]
+}

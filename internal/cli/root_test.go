@@ -97,10 +97,34 @@ func TestRoot_HelpExposesPlannerConfiguration(t *testing.T) {
 	if !strings.Contains(got, "--planner") {
 		t.Fatalf("help should still expose planner policy, got:\n%s", got)
 	}
-	for _, visible := range []string{"--llm-url", "--llm-model", "--llm-timeout", "--version"} {
+	for _, visible := range []string{"--llm-url", "--llm-model", "--llm-timeout", "--template", "--version"} {
 		if !strings.Contains(got, visible) {
 			t.Fatalf("help should expose %q, got:\n%s", visible, got)
 		}
+	}
+}
+
+func TestRoot_TemplateAndPlanAreMutuallyExclusive(t *testing.T) {
+	t.Parallel()
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"--template", "default", "--plan", "--planner", "off"})
+	cmd.SetIn(strings.NewReader("# Source\n"))
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "--template and --plan are mutually exclusive") {
+		t.Fatalf("Execute error = %v, want template/plan conflict", err)
+	}
+}
+
+func TestRoot_VersionSkipsTemplateLoading(t *testing.T) {
+	t.Parallel()
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"--version", "--template", "definitely-missing-template.tmpl"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute: %v", err)
 	}
 }
 

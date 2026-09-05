@@ -76,10 +76,9 @@ func scopeDarkHighlightCSS(css string) string {
 	return b.String()
 }
 
-// wrapPage wraps rendered body HTML in a full HTML5 document.
-// title must already be HTML-escaped by the caller. opts supplies optional
-// presentation overrides (initial theme, reader width).
-func wrapPage(title, body string, opts Options) string {
+// pageHead contains all pre-paint behavior and embedded styles. title is escaped
+// by the fragment renderer; body is inspected only for optional component CSS.
+func pageHead(title, body string, opts Options) string {
 	// themeDefault sets the pre-paint fallback theme that theme.js reads; only
 	// an explicit "light"/"dark" forces it ("" and "auto" follow the system).
 	themeDefault := ""
@@ -95,23 +94,26 @@ func wrapPage(title, body string, opts Options) string {
 	widthOverride := ""
 	if opts.MaxWidth != "" {
 		widthOverride = fmt.Sprintf("\n.markdown-body { max-width: %s; }", opts.MaxWidth)
+		if isReadingTemplate(opts.Template) {
+			widthOverride += fmt.Sprintf("\n.reading-page { --reading-width: %s; }", opts.MaxWidth)
+		}
 	}
 
 	frameStyle := ""
-	content := body
 	if opts.Frame {
 		frameStyle = "\n" + frameCSS()
-		content = terminalFrame(title, body)
 	}
 	alertStyle := ""
 	if strings.Contains(body, `class="markdown-alert `) {
 		alertStyle = "\n" + alertCSS()
 	}
+	layoutStyle := ""
+	if isReadingTemplate(opts.Template) {
+		layoutStyle = "\n" + mustReadAsset("assets/reading.css")
+	}
 
 	var w strings.Builder
-	fmt.Fprintf(&w, `<!DOCTYPE html>
-<html lang="en">
-<head>
+	fmt.Fprintf(&w, `
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <script>
@@ -120,11 +122,13 @@ func wrapPage(title, body string, opts Options) string {
   <title>%s</title>
   <style>
 %s
-%s%s%s%s
+%s%s%s%s%s
   </style>
-</head>
-<body>
-  <div class="theme-controls" role="group" aria-label="Appearance controls">
+`, themeDefault+paletteDefault, themeJS(), title, baseCSS(), highlightCSS(opts.CodeTheme), widthOverride, frameStyle, alertStyle, layoutStyle)
+	return w.String()
+}
+
+const pageControls = `<div class="theme-controls" role="group" aria-label="Appearance controls">
     <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle light or dark theme" aria-pressed="false">☾</button>
     <div class="palette-switcher" aria-label="Color palette">
       <button class="palette-button" type="button" data-palette-choice="sepia" aria-label="Sepia palette" aria-pressed="false"></button>
@@ -133,23 +137,18 @@ func wrapPage(title, body string, opts Options) string {
       <button class="palette-button" type="button" data-palette-choice="rose" aria-label="Rose palette" aria-pressed="false"></button>
       <button class="palette-button" type="button" data-palette-choice="catppuccin" aria-label="Catppuccin palette" aria-pressed="false"></button>
     </div>
-  </div>
-  <article class="markdown-body">
-%s
-  </article>
-  <script>
-%s
-  </script>
-  <script>
+  </div>`
+
+func pageScripts() string {
+	return fmt.Sprintf(`<script>
 %s
   </script>
   <script>
 %s
   </script>
-</body>
-</html>
-`, themeDefault+paletteDefault, themeJS(), title, baseCSS(), highlightCSS(opts.CodeTheme), widthOverride, frameStyle, alertStyle, content, copyJS(), headingsJS(), reportJS())
-	return w.String()
+  <script>
+%s
+  </script>`, copyJS(), headingsJS(), reportJS())
 }
 
 func validPalette(palette string) bool {

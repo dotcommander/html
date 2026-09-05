@@ -36,7 +36,7 @@ func (cmd *command) SetErr(out io.Writer)  { cmd.errOut = out }
 func (cmd *command) Execute() error {
 	var noOpen, force, safe, plain, markdown, frame bool
 	var plan, stdout, version bool
-	var title, lang, codeTheme, output string
+	var title, lang, codeTheme, output, pageTemplate string
 	reportDefaults := report.DefaultOptions()
 	mode := reportDefaults.Mode
 	layout := reportDefaults.Layout
@@ -58,6 +58,7 @@ func (cmd *command) Execute() error {
 	stringFlag(fs, &title, "title", "t", "stdin", "page title for piped input")
 	stringFlag(fs, &lang, "lang", "l", "", "syntax-highlight language for plain mode (e.g. go, json; \"text\" = no highlighting)")
 	fs.StringVar(&codeTheme, "code-theme", "", "chroma style for code blocks (e.g. dracula, monokai, nord; empty = github/github-dark)")
+	fs.StringVar(&pageTemplate, "template", "", "page template: default, reader, notebook, or a local template file")
 	stringFlag(fs, &output, "output", "o", "", "write the final HTML document to a stable path (\"-\" writes stdout)")
 	fs.BoolVar(&plan, "plan", false, "print the report plan JSON without rendering")
 	fs.BoolVar(&stdout, "stdout", false, "write the final HTML document to stdout without opening")
@@ -110,6 +111,9 @@ func (cmd *command) Execute() error {
 	if plan && output != "" {
 		return fmt.Errorf("--plan and --output are mutually exclusive")
 	}
+	if plan && changed["template"] {
+		return fmt.Errorf("--template and --plan are mutually exclusive")
+	}
 	if stdout && output != "" {
 		return fmt.Errorf("--stdout and --output are mutually exclusive")
 	}
@@ -155,6 +159,7 @@ func (cmd *command) Execute() error {
 		Theme:      cfg.DefaultTheme,
 		Palette:    cfg.DefaultPalette,
 		TOC:        cfg.TOC,
+		Template:   pageTemplate,
 		Output:     output,
 		Report:     reportRequested,
 		Plan:       plan,

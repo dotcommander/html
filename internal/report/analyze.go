@@ -110,13 +110,8 @@ func analyzeJSON(src []byte, stats Stats, sourceName string) (Analysis, bool) {
 	if trimmed[0] != '[' && trimmed[0] != '{' && !analyzeJSONName(sourceName) {
 		return Analysis{}, false
 	}
-	var v any
-	dec := json.NewDecoder(bytes.NewReader(trimmed))
-	dec.UseNumber()
-	if err := dec.Decode(&v); err != nil {
-		return Analysis{}, false
-	}
-	if dec.Decode(&struct{}{}) != io.EOF {
+	v, ok := DecodeJSON(src)
+	if !ok {
 		return Analysis{}, false
 	}
 	switch x := v.(type) {

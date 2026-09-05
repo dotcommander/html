@@ -29,7 +29,7 @@ const lexerAnalyseCap = 64 << 10
 //   - everything else falls back to HTML-escaped raw text.
 //
 // goldmark, the synthesized <h1>, and the TOC are bypassed, so line structure is
-// preserved exactly. The page title is the already-escaped fallback title.
+// preserved exactly. Page assembly and framing belong to assemblePage.
 func renderPlain(src []byte, opts Options) string {
 	body := ""
 	switch {
@@ -56,7 +56,7 @@ func renderPlain(src []byte, opts Options) string {
 		clean := reANSI.ReplaceAll(src, nil)
 		body = `<pre><code class="language-plaintext">` + htmlpkg.EscapeString(string(clean)) + "</code></pre>\n"
 	}
-	return wrapPage(htmlpkg.EscapeString(opts.FallbackTitle), body, opts)
+	return body
 }
 
 // pickLexer chooses a chroma lexer for plain input, or nil to render raw escaped

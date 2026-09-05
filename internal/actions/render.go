@@ -1,10 +1,8 @@
 package actions
 
 import (
-	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -12,87 +10,127 @@ import (
 	"github.com/dotcommander/html/internal/render"
 )
 
-func renderFile(opts Options) (string, []render.ImageDiagnostic, error) {
-	info, err := os.Stat(opts.File)
-	if err != nil {
-		return "", nil, fmt.Errorf("source file: %w", err)
-	}
-	if info.IsDir() {
-		return "", nil, fmt.Errorf("source file: %s is a directory", opts.File)
-	}
-
-	fallbackTitle := strings.TrimSuffix(filepath.Base(opts.File), filepath.Ext(opts.File))
-	plain := resolveMode(opts.Plain, opts.Markdown, !isMarkdownExt(opts.File))
-	renderOpts := buildRenderOpts(opts, fallbackTitle, filepath.Base(opts.File), plain)
-
-	f, err := os.Open(opts.File)
-	if err != nil {
-		return "", nil, fmt.Errorf("source file: %w", err)
-	}
-	src, err := readCapped(f, "source file "+opts.File)
-	f.Close()
+// renderCachedDocument renders normal document input through the appropriate
+// file or content cache without changing the renderer's source-specific policy.
+func renderCachedDocument(opts Options) (string, []render.ImageDiagnostic, error) {
+	doc, err := prepareDocument(opts)
 	if err != nil {
 		return "", nil, err
 	}
-	if render.Detect(src) == render.KindBinary {
-		return "", nil, errBinaryInput
+	fp := render.Fingerprint(doc.options)
+	route := cacheRouteFor(opts, doc.src)
+	if err := route.rejectAliases(opts); err != nil {
+		return "", nil, err
 	}
-	addImageFingerprint(src, &renderOpts)
-	fp := render.Fingerprint(renderOpts)
 
-	fresh, err := cache.Fresh(opts.File, src, fp)
+	path, hit, err := route.lookup(fp, opts.Force)
 	if err != nil {
 		return "", nil, err
 	}
-	if fresh && !opts.Force {
-		path, err := cache.PathFor(opts.File)
-		return path, render.ImageDiagnostics(src, renderOpts), err
+	if hit {
+		return path, render.ImageDiagnostics(doc.src, doc.options), nil
 	}
 
-	htmlDoc, diagnostics, err := render.RenderWithDiagnostics(src, renderOpts)
+	htmlDoc, diagnostics, err := render.RenderWithDiagnostics(doc.src, doc.options)
 	if err != nil {
 		return "", nil, err
 	}
-	path, err := cache.Write(opts.File, src, htmlDoc, fp)
+	path, err = route.write(htmlDoc, fp)
 	return path, diagnostics, err
 }
 
-// renderStdin renders piped data. The bytes must be read up front (to auto-detect
-// the mode and to key the cache by content), so there is no mtime fast-path: the
-// content hash is the cache key.
-func renderStdin(opts Options) (string, []render.ImageDiagnostic, error) {
-	src, err := readCapped(opts.Stdin, "stdin")
-	if err != nil {
-		return "", nil, err
-	}
-	if len(src) == 0 {
-		return "", nil, errors.New("no input on stdin")
-	}
+type preparedDocument struct {
+	src     []byte
+	options render.Options
+}
 
+// prepareDocument owns source-specific document preparation shared by cached
+// and explicit-output rendering.
+func prepareDocument(opts Options) (preparedDocument, error) {
+	src, fallbackTitle, sourceName, err := readInput(opts)
+	if err != nil {
+		return preparedDocument{}, err
+	}
 	kind := render.Detect(src)
 	if kind == render.KindBinary {
-		return "", nil, errBinaryInput
+		return preparedDocument{}, errBinaryInput
 	}
-	plain := resolveMode(opts.Plain, opts.Markdown, kind != render.KindMarkdown)
-	renderOpts := buildRenderOpts(opts, stdinTitle(opts.Title), "", plain)
+	autoPlain := !isMarkdownExt(opts.File)
+	if opts.Stdin != nil {
+		autoPlain = kind != render.KindMarkdown
+	}
+	plain := resolveMode(opts.Plain, opts.Markdown, autoPlain)
+	renderOpts := buildRenderOpts(opts, fallbackTitle, sourceName, plain)
+	if err := render.ValidateTemplateMode(renderOpts, false); err != nil {
+		return preparedDocument{}, err
+	}
 	addImageFingerprint(src, &renderOpts)
-	fp := render.Fingerprint(renderOpts)
+	return preparedDocument{src: src, options: renderOpts}, nil
+}
 
-	fresh, err := cache.FreshContent(src, fp)
-	if err != nil {
-		return "", nil, err
-	}
-	if fresh && !opts.Force {
-		path, err := cache.PathForContent(src)
-		return path, render.ImageDiagnostics(src, renderOpts), err
-	}
+// cacheRoute preserves the cache API distinction between source files and piped
+// content while giving each renderer one cache lifecycle to call.
+type cacheRoute struct {
+	file  string
+	src   []byte
+	stdin bool
+}
 
-	htmlDoc, diagnostics, err := render.RenderWithDiagnostics(src, renderOpts)
+func cacheRouteFor(opts Options, src []byte) cacheRoute {
+	return cacheRoute{file: opts.File, src: src, stdin: opts.Stdin != nil}
+}
+
+// lookup resolves a reusable cache entry, leaving writes with the caller.
+func (route cacheRoute) lookup(fingerprint string, force bool) (string, bool, error) {
+	fresh, err := route.fresh(fingerprint)
 	if err != nil {
-		return "", nil, err
+		return "", false, err
 	}
-	path, err := cache.WriteContent(src, htmlDoc, fp)
-	return path, diagnostics, err
+	if !fresh || force {
+		return "", false, nil
+	}
+	path, err := route.path()
+	if err != nil {
+		return "", false, err
+	}
+	return path, true, nil
+}
+
+func (route cacheRoute) fresh(fingerprint string) (bool, error) {
+	if route.stdin {
+		return cache.FreshContent(route.src, fingerprint)
+	}
+	return cache.Fresh(route.file, route.src, fingerprint)
+}
+
+func (route cacheRoute) path() (string, error) {
+	if route.stdin {
+		return cache.PathForContent(route.src)
+	}
+	return cache.PathFor(route.file)
+}
+
+// Cache publication has two destinations. Check both before lookup as even a
+// cache hit can tighten their permissions, and a miss replaces their contents.
+func (route cacheRoute) rejectAliases(opts Options) error {
+	path, err := route.path()
+	if err != nil {
+		return err
+	}
+	for _, target := range cache.PublicationPaths(path) {
+		opts.Output = target
+		if err := rejectOutputAlias(opts); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (route cacheRoute) write(htmlDoc, fingerprint string) (string, error) {
+	if route.stdin {
+		return cache.WriteContent(route.src, htmlDoc, fingerprint)
+	}
+	return cache.Write(route.file, route.src, htmlDoc, fingerprint)
 }
 
 // resolveMode decides plain vs Markdown. An explicit flag wins (--markdown, then
@@ -129,9 +167,11 @@ func buildRenderOpts(opts Options, fallbackTitle, sourceName string, plain bool)
 		}
 	}
 	return render.Options{
-		FallbackTitle: fallbackTitle,
-		SourceName:    sourceName,
-		SourceDir:     sourceDir,
+		Template:       opts.Template,
+		TemplateSource: opts.templateSource,
+		FallbackTitle:  fallbackTitle,
+		SourceName:     sourceName,
+		SourceDir:      sourceDir,
 		// Safe mode keeps relative links as written. Goldmark intentionally blocks
 		// generated file: URLs, and bypassing that guard would weaken its untrusted-
 		// input boundary.

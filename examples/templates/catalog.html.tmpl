@@ -1,0 +1,40 @@
+{{define "card"}}
+<section class="catalog-card">
+  <p class="item-category">{{.category}}</p>
+  <h2><a href="{{.url}}">{{.name}}</a></h2>
+  <p>{{.summary}}</p>
+  <dl><div><dt>Weight</dt><dd>{{.specs.weight}}</dd></div><div><dt>Runtime</dt><dd>{{.specs.runtime}}</dd></div></dl>
+  <footer><strong>${{.price}}</strong><span>{{if .available}}Available{{else}}Coming soon{{end}}</span></footer>
+</section>
+{{end}}
+<!DOCTYPE html>
+<html lang="en">
+<head>{{.Head}}
+<style>
+  .catalog { max-width: 76rem; margin: 6rem auto 3rem; padding: 0 1.5rem; }
+  .catalog header { max-width: 44rem; margin-bottom: 3rem; }
+  .catalog h1 { font: 500 clamp(2.5rem, 6vw, 4.5rem)/1.05 var(--font-body); letter-spacing: -0.04em; margin: 0.75rem 0; }
+  .catalog header p { font-size: 1.125rem; line-height: 1.7; color: var(--muted); }
+  .catalog-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); gap: 1.5rem; }
+  .catalog-card { display: flex; flex-direction: column; padding: 1.75rem; border: 1px solid var(--border); border-radius: 8px; background: var(--paper); }
+  .item-category { color: var(--accent); font: 700 0.75rem var(--font-sans); text-transform: uppercase; letter-spacing: 0.1em; }
+  .catalog-card h2 { font-size: 1.75rem; margin: 0.75rem 0; }
+  .catalog-card a { color: var(--text); text-decoration-thickness: 1px; text-underline-offset: 0.2em; }
+  .catalog-card p { line-height: 1.7; }
+  .catalog-card dl { font: 0.875rem/1.8 var(--font-sans); margin-top: auto; }
+  .catalog-card dl div, .catalog-card footer { display: flex; justify-content: space-between; gap: 1rem; }
+  .catalog-card dd { margin: 0; }
+  .catalog-card footer { padding-top: 1rem; border-top: 1px solid var(--border); align-items: baseline; }
+  .catalog-card footer span { font: 0.8rem var(--font-sans); color: var(--muted); }
+  @media print { .catalog { margin: 0; } .catalog-card { break-inside: avoid; } }
+</style>
+</head>
+<body data-example="catalog">
+  {{.Controls}}
+  <main class="catalog">
+    <header><span class="item-category">Equipment catalog</span><h1>{{.Data.title}}</h1><p>{{.Data.subtitle}}</p></header>
+    <div class="catalog-grid">{{range .Data.items}}{{template "card" .}}{{else}}<p>No equipment in this collection.</p>{{end}}</div>
+  </main>
+  {{.Scripts}}
+</body>
+</html>

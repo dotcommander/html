@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>{{.Head}}</head>
+<body class="reading-page reader-page">
+  {{.Controls}}
+  <main class="reader-shell{{if .TOC}} has-contents{{end}}">
+    {{if .TOC}}<aside class="reader-contents">{{.TOC}}</aside>{{end}}
+    <article class="markdown-body reader-content">
+      <div class="reading-label">Reader Sheet</div>
+{{.Content}}
+    </article>
+  </main>
+  {{.Scripts}}
+</body>
+</html>

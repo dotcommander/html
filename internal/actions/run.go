@@ -6,9 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/dotcommander/html/internal/atomicfile"
-	"github.com/dotcommander/html/internal/cache"
 	"github.com/dotcommander/html/internal/open"
 	"github.com/dotcommander/html/internal/render"
 	"github.com/dotcommander/html/internal/report"
@@ -43,7 +43,14 @@ type Options struct {
 	Theme     string    // initial theme (config default_theme): "light"|"dark"|"auto"|""
 	Palette   string    // initial palette (config default_palette): sepia|blue|green|rose|catppuccin|""
 	TOC       *bool     // TOC override (config toc): nil = automatic
+	Template  string    // default, reader, notebook, or a caller-relative template file
 	Output    string    // -o: write rendered HTML to this path ("-" = stdout) instead of caching+opening; "" = default
+
+	// templateSource and templatePath are prepared once per invocation. Template
+	// discovery stays in actions so the renderer only receives trusted bytes.
+	templateSource string
+	templatePath   string
+	templateInfo   os.FileInfo
 
 	Report     bool
 	Plan       bool
@@ -75,6 +82,12 @@ func RunWithResult(opts Options) (Result, error) {
 	if opts.Frame {
 		opts.Plain = true // --frame renders the body as plain text inside terminal chrome
 	}
+	if opts.Plan && opts.Template != "" {
+		return Result{}, errors.New("--template and --plan are mutually exclusive")
+	}
+	if err := prepareTemplate(&opts); err != nil {
+		return Result{}, err
+	}
 	if opts.CodeTheme != "" && !render.ValidCodeTheme(opts.CodeTheme) {
 		return Result{}, fmt.Errorf("code theme: unknown chroma style %q", opts.CodeTheme)
 	}
@@ -84,64 +97,33 @@ func RunWithResult(opts Options) (Result, error) {
 	if opts.Stdout || opts.Output != "" {
 		return runDocumentOutput(opts)
 	}
-	var path string
-	var diagnostics []render.ImageDiagnostic
-	var err error
-	if opts.Stdin != nil {
-		path, diagnostics, err = renderStdin(opts)
-	} else {
-		path, diagnostics, err = renderFile(opts)
-	}
+	path, diagnostics, err := renderCachedDocument(opts)
 	if err != nil {
 		return Result{Path: path, Diagnostics: diagnostics}, err
 	}
-	if !opts.NoOpen {
-		if err := open.Open(path, opts.OpenCmd); err != nil {
-			return Result{Path: path, Diagnostics: diagnostics}, fmt.Errorf("open browser: %w", err)
-		}
-	}
-	return Result{Path: path, Diagnostics: diagnostics}, nil
+	return finalizePublication(opts, path, diagnostics)
 }
 
 func runDocumentOutput(opts Options) (Result, error) {
 	if err := rejectOutputAlias(opts); err != nil {
 		return Result{}, err
 	}
-	src, fallbackTitle, sourceName, err := readInput(opts)
+	doc, err := prepareDocument(opts)
 	if err != nil {
 		return Result{}, err
 	}
-	if render.Detect(src) == render.KindBinary {
-		return Result{}, errBinaryInput
-	}
-	plain := false
-	if opts.Stdin != nil {
-		plain = resolveMode(opts.Plain, opts.Markdown, render.Detect(src) != render.KindMarkdown)
-	} else {
-		plain = resolveMode(opts.Plain, opts.Markdown, !isMarkdownExt(opts.File))
-	}
-	renderOpts := buildRenderOpts(opts, fallbackTitle, sourceName, plain)
-	addImageFingerprint(src, &renderOpts)
-	htmlDoc, diagnostics, err := render.RenderWithDiagnostics(src, renderOpts)
+	htmlDoc, diagnostics, err := render.RenderWithDiagnostics(doc.src, doc.options)
 	if err != nil {
 		return Result{}, err
 	}
-	if opts.Stdout || opts.Output == "-" {
-		return Result{Stdout: htmlDoc, Diagnostics: diagnostics}, nil
-	}
-	if err := atomicfile.Write(opts.Output, []byte(htmlDoc), 0o644); err != nil {
-		return Result{}, fmt.Errorf("write output: %w", err)
-	}
-	if !opts.NoOpen {
-		if err := open.Open(opts.Output, opts.OpenCmd); err != nil {
-			return Result{Path: opts.Output, Diagnostics: diagnostics}, fmt.Errorf("open browser: %w", err)
-		}
-	}
-	return Result{Path: opts.Output, Diagnostics: diagnostics}, nil
+	return publishExplicitOutput(opts, htmlDoc, diagnostics)
 }
 
 func runReport(opts Options) (Result, error) {
 	if err := rejectOutputAlias(opts); err != nil {
+		return Result{}, err
+	}
+	if err := render.ValidateTemplateMode(render.Options{Template: opts.Template}, true); err != nil {
 		return Result{}, err
 	}
 	src, fallbackTitle, sourceName, err := readInput(opts)
@@ -182,47 +164,42 @@ func runReport(opts Options) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	if opts.Stdout || opts.Output == "-" {
-		return Result{Stdout: htmlDoc, Diagnostics: diagnostics}, nil
-	}
-	if opts.Output != "" {
-		if err := atomicfile.Write(opts.Output, []byte(htmlDoc), 0o644); err != nil {
-			return Result{}, fmt.Errorf("write output: %w", err)
-		}
-		if !opts.NoOpen {
-			if err := open.Open(opts.Output, opts.OpenCmd); err != nil {
-				return Result{Path: opts.Output, Diagnostics: diagnostics}, fmt.Errorf("open browser: %w", err)
-			}
-		}
-		return Result{Path: opts.Output, Diagnostics: diagnostics}, nil
+	if opts.Stdout || opts.Output != "" {
+		return publishExplicitOutput(opts, htmlDoc, diagnostics)
 	}
 
 	fp := render.Fingerprint(renderOpts)
-	var path string
-	if opts.Stdin != nil {
-		fresh, err := cache.FreshContent(src, fp)
-		if err != nil {
-			return Result{}, err
-		}
-		if fresh && !opts.Force {
-			path, err = cache.PathForContent(src)
-		} else {
-			path, err = cache.WriteContent(src, htmlDoc, fp)
-		}
-	} else {
-		fresh, err := cache.Fresh(opts.File, src, fp)
-		if err != nil {
-			return Result{}, err
-		}
-		if fresh && !opts.Force {
-			path, err = cache.PathFor(opts.File)
-		} else {
-			path, err = cache.Write(opts.File, src, htmlDoc, fp)
-		}
+	route := cacheRouteFor(opts, src)
+	if err := route.rejectAliases(opts); err != nil {
+		return Result{}, err
+	}
+	path, hit, err := route.lookup(fp, opts.Force)
+	if err != nil {
+		return Result{}, err
+	}
+	if !hit {
+		path, err = route.write(htmlDoc, fp)
 	}
 	if err != nil {
 		return Result{}, err
 	}
+	return finalizePublication(opts, path, diagnostics)
+}
+
+// publishExplicitOutput owns publication for every rendered document that
+// bypasses the cache, regardless of which renderer produced it.
+func publishExplicitOutput(opts Options, htmlDoc string, diagnostics []render.ImageDiagnostic) (Result, error) {
+	if opts.Stdout || opts.Output == "-" {
+		return Result{Stdout: htmlDoc, Diagnostics: diagnostics}, nil
+	}
+	if err := atomicfile.Write(opts.Output, []byte(htmlDoc), 0o644); err != nil {
+		return Result{}, fmt.Errorf("write output: %w", err)
+	}
+	return finalizePublication(opts, opts.Output, diagnostics)
+}
+
+// finalizePublication returns the published artifact and optionally opens it.
+func finalizePublication(opts Options, path string, diagnostics []render.ImageDiagnostic) (Result, error) {
 	if !opts.NoOpen {
 		if err := open.Open(path, opts.OpenCmd); err != nil {
 			return Result{Path: path, Diagnostics: diagnostics}, fmt.Errorf("open browser: %w", err)
