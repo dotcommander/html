@@ -160,10 +160,10 @@ func validPalette(palette string) bool {
 	}
 }
 
-// terminalFrame wraps a plain/ANSI body in faux terminal-window chrome (a title
+// TerminalFrame wraps a plain/ANSI body in faux terminal-window chrome (a title
 // bar with traffic-light dots over the body). title must already be HTML-escaped
 // by the caller; body is the already-rendered <pre> content.
-func terminalFrame(title, body string) string {
+func TerminalFrame(title, body string) string {
 	return `<div class="term-frame"><div class="term-bar">` +
 		`<span class="term-dots"><i></i><i></i><i></i></span>` +
 		`<span class="term-title">` + title + `</span></div>` +

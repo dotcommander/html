@@ -23,20 +23,20 @@ func detectPlainTable(src []byte, sourceName string) (plainTable, bool) {
 	analysis := report.Analyze(src, sourceName)
 	switch analysis.Kind {
 	case report.KindCSVRecords, report.KindTSVRecords, report.KindTableRecords:
-		headers, rows := tableRows(src, analysis)
+		headers, rows := TableRows(src, analysis)
 		if len(headers) >= 2 && len(rows) > 0 {
 			return plainTable{headers: headers, rows: rows}, true
 		}
 	}
 
-	return parseWhitespaceTable(string(stripUTF8BOM(src)))
+	return parseWhitespaceTable(string(StripUTF8BOM(src)))
 }
 
 func renderPlainTableDocument(src []byte, sourceName string) (string, bool) {
 	if _, ok := detectPlainTable(src, sourceName); ok {
 		return "", false
 	}
-	sections, ok := parsePlainTableSections(string(stripUTF8BOM(src)))
+	sections, ok := parsePlainTableSections(string(StripUTF8BOM(src)))
 	if !ok {
 		return "", false
 	}
@@ -226,7 +226,7 @@ func looksLikeHeaderCell(field string) bool {
 }
 
 func renderPlainTable(table plainTable) string {
-	labels := headerLabels(table.headers)
+	labels := HeaderLabels(table.headers)
 	var b strings.Builder
 	b.WriteString(`<table class="plain-data-table"><thead><tr>`)
 	for _, label := range labels {
@@ -240,7 +240,7 @@ func renderPlainTable(table plainTable) string {
 		for i := range labels {
 			b.WriteString(`<td>`)
 			if i < len(row) {
-				b.WriteString(htmlpkg.EscapeString(cleanTableText(row[i])))
+				b.WriteString(htmlpkg.EscapeString(CleanTableText(row[i])))
 			}
 			b.WriteString(`</td>`)
 		}

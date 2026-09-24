@@ -12,6 +12,7 @@ import (
 	"github.com/dotcommander/html/internal/open"
 	"github.com/dotcommander/html/internal/render"
 	"github.com/dotcommander/html/internal/report"
+	"github.com/dotcommander/html/internal/reportview"
 )
 
 // maxMarkdownBytes caps source reads at 32 MiB. A source beyond this cap is
@@ -165,7 +166,7 @@ func runReport(opts Options) (Result, error) {
 	if reportRendersArticle(plan) {
 		diagnostics = render.ImageDiagnostics(src, renderOpts)
 	}
-	htmlDoc, err := render.RenderReport(src, renderOpts, analysis, plan)
+	htmlDoc, err := reportview.RenderReport(src, renderOpts, analysis, plan)
 	if err != nil {
 		return Result{}, err
 	}

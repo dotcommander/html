@@ -11,60 +11,60 @@ import (
 	"github.com/alecthomas/chroma/v2/styles"
 )
 
-// reANSI matches ANSI/VT100 CSI escape sequences — used to detect colored input
-// (so renderANSI can preserve its colors) and to strip stray escapes from the
+// ReANSI matches ANSI/VT100 CSI escape sequences — used to detect colored input
+// (so RenderANSI can preserve its colors) and to strip stray escapes from the
 // raw-text fallback.
-var reANSI = regexp.MustCompile("\x1b\\[[0-9;?]*[ -/]*[@-~]")
+var ReANSI = regexp.MustCompile("\x1b\\[[0-9;?]*[ -/]*[@-~]")
 
 // lexerAnalyseCap bounds how many bytes content auto-detection inspects, so
 // language analysis stays fast on large inputs.
 const lexerAnalyseCap = 64 << 10
 
-// renderPlain renders src as a preformatted, non-Markdown page body, picking the
+// renderPlain renders src as a preformatted, non-Markdown page Body, picking the
 // most faithful representation:
-//   - ANSI-colored input keeps its colors (renderANSI);
+//   - ANSI-colored input keeps its colors (RenderANSI);
 //   - otherwise, when a language is detected (or forced via opts.Lang), the
 //     source is syntax-highlighted with chroma, reusing the same CSS as Markdown
 //     code blocks;
 //   - everything else falls back to HTML-escaped raw text.
 //
 // goldmark, the synthesized <h1>, and the TOC are bypassed, so line structure is
-// preserved exactly. Page assembly and framing belong to assemblePage.
+// preserved exactly. Page assembly and framing belong to AssemblePage.
 func renderPlain(src []byte, opts Options) string {
-	body := ""
+	Body := ""
 	switch {
-	case reANSI.Match(src):
-		body = renderANSI(src)
+	case ReANSI.Match(src):
+		Body = RenderANSI(src)
 	default:
 		if opts.Lang == "" {
 			if tableBody, ok := renderPlainTableDocument(src, opts.SourceName); ok {
-				body = tableBody
+				Body = tableBody
 			} else if table, ok := detectPlainTable(src, opts.SourceName); ok {
-				body = renderPlainTable(table)
+				Body = renderPlainTable(table)
 			}
 		}
-		if body == "" {
-			if lexer := pickLexer(opts.Lang, opts.SourceName, src); lexer != nil {
-				if hl, err := highlightCode(string(src), lexer, opts.CodeTheme); err == nil {
-					body = hl
+		if Body == "" {
+			if lexer := PickLexer(opts.Lang, opts.SourceName, src); lexer != nil {
+				if hl, err := HighlightCode(string(src), lexer, opts.CodeTheme); err == nil {
+					Body = hl
 				}
 			}
 		}
 	}
-	if body == "" {
+	if Body == "" {
 		// Raw preformatted fallback (defensively strip any stray escapes).
-		clean := reANSI.ReplaceAll(src, nil)
-		body = `<pre><code class="language-plaintext">` + htmlpkg.EscapeString(string(clean)) + "</code></pre>\n"
+		clean := ReANSI.ReplaceAll(src, nil)
+		Body = `<pre><code class="language-plaintext">` + htmlpkg.EscapeString(string(clean)) + "</code></pre>\n"
 	}
-	return body
+	return Body
 }
 
-// pickLexer chooses a chroma lexer for plain input, or nil to render raw escaped
+// PickLexer chooses a chroma lexer for plain input, or nil to render raw escaped
 // text. Precedence: an explicit language (lang) — where "text"/"none"/etc. force
 // raw — then the source filename (file inputs), then bounded content analysis
 // (stdin). The plaintext lexer is treated as "no highlighting" so prose and
 // unknown formats stay raw rather than wrapped in an empty chroma block.
-func pickLexer(lang, sourceName string, src []byte) chroma.Lexer {
+func PickLexer(lang, sourceName string, src []byte) chroma.Lexer {
 	var lx chroma.Lexer
 	switch strings.ToLower(strings.TrimSpace(lang)) {
 	case "text", "txt", "none", "plain", "plaintext", "raw":
@@ -135,11 +135,11 @@ func looksLikeProseLine(line string) bool {
 	return strings.ContainsAny(trimmed, " .,?!'\"`*")
 }
 
-// highlightCode renders source with the given chroma lexer using the same class-
+// HighlightCode renders source with the given chroma lexer using the same class-
 // based formatter and code theme as the Markdown code path, so the existing
 // highlightCSS styles it identically. Mode classes keep the light wrapper
 // explicit so the page can switch to its scoped dark palette at runtime.
-func highlightCode(source string, lexer chroma.Lexer, codeTheme string) (string, error) {
+func HighlightCode(source string, lexer chroma.Lexer, codeTheme string) (string, error) {
 	lexer = chroma.Coalesce(lexer)
 	iterator, err := lexer.Tokenise(nil, source)
 	if err != nil {

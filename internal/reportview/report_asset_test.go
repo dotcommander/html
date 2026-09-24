@@ -1,17 +1,43 @@
-package render
+package reportview
 
 import (
 	"strings"
 	"testing"
 
+	render "github.com/dotcommander/html/internal/render"
+	"github.com/dotcommander/html/internal/report"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+// reportPage renders a minimal CSV report once so asset assertions target the
+// inlined report.js / base.css bytes through the public seam instead of
+// reaching into render's unexported asset accessors.
+func reportPage(t *testing.T) string {
+	t.Helper()
+
+	src := []byte("name,score\nAlpha,10\nBeta,2\n")
+	analysis := report.Analyze(src, "scores.csv")
+	plan := report.ReportPlan{
+		Version: report.PlanVersion,
+		Kind:    report.KindCSVRecords,
+		Layout:  report.LayoutTabbedPage,
+		Mode:    report.ModeDataBrowser,
+		Components: []report.Component{
+			{Type: report.ComponentSummary, Source: "analysis", Title: "Summary", Options: map[string]string{}},
+		},
+	}
+
+	page, err := RenderReport(src, render.Options{FallbackTitle: "scores"}, analysis, plan)
+	require.NoError(t, err)
+	return page
+}
+
 func TestReportJSSortDirectionUsesActiveHeaderState(t *testing.T) {
 	t.Parallel()
 
-	js := reportJS()
+	js := reportPage(t)
 
 	assert.Contains(t, js, `const emptyRow = tbody.querySelector("[data-report-empty-row]");`)
 	assert.Contains(t, js, `const dataRows = () => Array.from(tbody.rows).filter((row) => !row.hasAttribute("data-report-empty-row"));`)
@@ -29,7 +55,7 @@ func TestReportJSSortDirectionUsesActiveHeaderState(t *testing.T) {
 func TestReportJSSlidesKeyboardNavigation(t *testing.T) {
 	t.Parallel()
 
-	js := reportJS()
+	js := reportPage(t)
 
 	assert.Contains(t, js, `document.querySelectorAll("[data-report-slides]")`)
 	assert.Contains(t, js, `case "PageDown":`)
@@ -44,7 +70,7 @@ func TestReportJSSlidesKeyboardNavigation(t *testing.T) {
 func TestReportSlideHiddenStateSurvivesMobileCSS(t *testing.T) {
 	t.Parallel()
 
-	css := baseCSS()
+	css := reportPage(t)
 	hiddenRule := `.report-slide[hidden] {
   display: none;
 }`
@@ -58,7 +84,7 @@ func TestReportSlideHiddenStateSurvivesMobileCSS(t *testing.T) {
 func TestReportTabCSSKeepsLabelsAligned(t *testing.T) {
 	t.Parallel()
 
-	css := baseCSS()
+	css := reportPage(t)
 
 	assert.Contains(t, css, ".report-tab-list button {\n  min-width: 6.5rem;")
 	assert.Contains(t, css, "max-width: min(16rem, 100%);")
@@ -72,7 +98,7 @@ func TestReportTabCSSKeepsLabelsAligned(t *testing.T) {
 func TestReportTableHiddenRowsSurviveMobileCSS(t *testing.T) {
 	t.Parallel()
 
-	css := baseCSS()
+	css := reportPage(t)
 
 	assert.Contains(t, css, ".report-table tr[hidden] {\n    display: none;\n  }")
 	assert.Contains(t, css, ".report-empty-row td {\n  padding: 1.2rem;")
@@ -82,7 +108,7 @@ func TestReportTableHiddenRowsSurviveMobileCSS(t *testing.T) {
 func TestReportTableMobileSortCSS(t *testing.T) {
 	t.Parallel()
 
-	css := baseCSS()
+	css := reportPage(t)
 
 	assert.Contains(t, css, ".report-mobile-sort {\n  display: none;\n}")
 	assert.Contains(t, css, ".report-mobile-sort select:focus-visible")
@@ -92,7 +118,7 @@ func TestReportTableMobileSortCSS(t *testing.T) {
 func TestFileTreeCSSProvidesGuidesAndWrapping(t *testing.T) {
 	t.Parallel()
 
-	css := baseCSS()
+	css := reportPage(t)
 
 	assert.Contains(t, css, ".file-tree-overview {\n  display: flex;")
 	assert.Contains(t, css, ".file-tree-overview div")
@@ -108,7 +134,7 @@ func TestFileTreeCSSProvidesGuidesAndWrapping(t *testing.T) {
 func TestLogCSSProvidesSeverityLayout(t *testing.T) {
 	t.Parallel()
 
-	css := baseCSS()
+	css := reportPage(t)
 
 	assert.Contains(t, css, ".log-overview {\n  display: flex;")
 	assert.Contains(t, css, ".log-overview div")
@@ -125,7 +151,7 @@ func TestLogCSSProvidesSeverityLayout(t *testing.T) {
 func TestDiffCSSProvidesSummaryAndRows(t *testing.T) {
 	t.Parallel()
 
-	css := baseCSS()
+	css := reportPage(t)
 
 	assert.Contains(t, css, ".diff-summary {\n  display: flex;")
 	assert.Contains(t, css, ".diff-summary .diff-added strong")
@@ -139,7 +165,7 @@ func TestDiffCSSProvidesSummaryAndRows(t *testing.T) {
 func TestJSONOverviewCSSProvidesPills(t *testing.T) {
 	t.Parallel()
 
-	css := baseCSS()
+	css := reportPage(t)
 
 	assert.Contains(t, css, ".json-overview {\n  display: flex;")
 	assert.Contains(t, css, ".json-overview div,\n.json-overview span")
@@ -156,7 +182,7 @@ func TestJSONOverviewCSSProvidesPills(t *testing.T) {
 func TestCodeOverviewCSSProvidesPills(t *testing.T) {
 	t.Parallel()
 
-	css := baseCSS()
+	css := reportPage(t)
 
 	assert.Contains(t, css, ".code-overview {\n  display: flex;")
 	assert.Contains(t, css, ".code-overview div")
@@ -170,7 +196,7 @@ func TestCodeOverviewCSSProvidesPills(t *testing.T) {
 func TestArticleOverviewCSSProvidesPills(t *testing.T) {
 	t.Parallel()
 
-	css := baseCSS()
+	css := reportPage(t)
 
 	assert.Contains(t, css, ".article-overview {\n  display: flex;")
 	assert.Contains(t, css, ".article-overview div")
@@ -183,7 +209,7 @@ func TestArticleOverviewCSSProvidesPills(t *testing.T) {
 func TestMarkdownTableCSSFitsContentAndScrollsOnMobile(t *testing.T) {
 	t.Parallel()
 
-	css := baseCSS()
+	css := reportPage(t)
 
 	assert.Contains(t, css, ".markdown-body table:not(.report-table) {\n  border-collapse: collapse;\n  width: max-content;\n  max-width: 100%;")
 	assert.Contains(t, css, ".markdown-body table:not(.report-table) {\n    display: block;\n    width: max-content;\n    max-width: 100%;\n    overflow-x: auto;")
@@ -192,7 +218,7 @@ func TestMarkdownTableCSSFitsContentAndScrollsOnMobile(t *testing.T) {
 func TestPlainTableSectionCSSKeepsMetadataCompact(t *testing.T) {
 	t.Parallel()
 
-	css := baseCSS()
+	css := reportPage(t)
 
 	assert.Contains(t, css, ".plain-table-section {\n  margin: 0 0 1.8rem;")
 	assert.Contains(t, css, ".markdown-body pre.plain-table-meta {\n  display: inline-block;")
@@ -202,7 +228,7 @@ func TestPlainTableSectionCSSKeepsMetadataCompact(t *testing.T) {
 func TestTextOverviewCSSProvidesPills(t *testing.T) {
 	t.Parallel()
 
-	css := baseCSS()
+	css := reportPage(t)
 
 	assert.Contains(t, css, ".text-overview {\n  display: flex;")
 	assert.Contains(t, css, ".text-overview div")
@@ -216,7 +242,7 @@ func TestTextOverviewCSSProvidesPills(t *testing.T) {
 func TestBinaryOverviewCSSProvidesSafePreview(t *testing.T) {
 	t.Parallel()
 
-	css := baseCSS()
+	css := reportPage(t)
 
 	assert.Contains(t, css, ".binary-overview {\n  display: flex;")
 	assert.Contains(t, css, ".binary-overview div")
@@ -229,7 +255,7 @@ func TestBinaryOverviewCSSProvidesSafePreview(t *testing.T) {
 func TestRecordCardCSSWrapsLongTitles(t *testing.T) {
 	t.Parallel()
 
-	css := baseCSS()
+	css := reportPage(t)
 
 	assert.Contains(t, css, ".record-cards-overview {\n  display: flex;")
 	assert.Contains(t, css, ".record-cards-overview div")
@@ -244,7 +270,7 @@ func TestRecordCardCSSWrapsLongTitles(t *testing.T) {
 func TestTranscriptCSSProvidesTurnLayout(t *testing.T) {
 	t.Parallel()
 
-	css := baseCSS()
+	css := reportPage(t)
 
 	assert.Contains(t, css, ".transcript-overview {\n  display: flex;")
 	assert.Contains(t, css, ".transcript-overview div")
@@ -261,7 +287,7 @@ func TestTranscriptCSSProvidesTurnLayout(t *testing.T) {
 func TestMobileLayoutReservesSpaceForThemeControls(t *testing.T) {
 	t.Parallel()
 
-	css := baseCSS()
+	css := reportPage(t)
 
 	assert.Contains(t, css, ".theme-controls {\n  position: fixed;")
 	assert.Contains(t, css, "display: flex;")
@@ -281,7 +307,7 @@ func TestMobileLayoutReservesSpaceForThemeControls(t *testing.T) {
 func TestReportJSReviewCommentsPersistAndCopy(t *testing.T) {
 	t.Parallel()
 
-	js := reportJS()
+	js := reportPage(t)
 
 	assert.Contains(t, js, `.review-card .review-comment`)
 	assert.Contains(t, js, "`html-review:v2:${documentDigest}:${rowDigest}:${occurrence}`")

@@ -9,7 +9,7 @@ import (
 )
 
 // renderSchemaVersion is bumped whenever renderer behavior changes in a way the
-// embedded asset bytes do not capture (goldmark options, wrapPage markup, report
+// embedded asset bytes do not capture (goldmark options, AssemblePage markup, report
 // component semantics, chroma theme selection). Bumping it invalidates every
 // cached page.
 const renderSchemaVersion = "59"

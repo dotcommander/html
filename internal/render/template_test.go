@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dotcommander/html/internal/report"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -109,21 +108,6 @@ func TestTemplateSafeModeAndFraming(t *testing.T) {
 	assert.Contains(t, got, `&lt;plain&gt;`)
 }
 
-func TestTemplateReportExecutesOnce(t *testing.T) {
-	t.Parallel()
-	src := []byte("# Report\n\n## One\n\nText.\n\n## Two\n\nMore text.\n")
-	for _, layout := range []report.LayoutOverride{report.LayoutOverrideSingle, report.LayoutOverrideTabs, report.LayoutOverrideSlides} {
-		analysis, plan := report.Plan(t.Context(), src, report.Options{SourceName: "report.md", Layout: layout, Planner: report.PlannerOff})
-		toc := true
-		got, err := RenderReport(src, Options{Template: "custom", TemplateSource: `PAGE{{.Content}}END{{.TOC}}`, TOC: &toc}, analysis, plan)
-		require.NoError(t, err)
-		assert.Equal(t, 1, strings.Count(got, "PAGE"))
-		assert.Equal(t, 1, strings.Count(got, "END"))
-		assert.Contains(t, got, `<h1 id="report">Report</h1>`)
-		assert.Equal(t, 1, strings.Count(got, `<nav class="toc"`))
-	}
-}
-
 func TestReadingTemplates(t *testing.T) {
 	t.Parallel()
 	for _, selector := range []string{"reader", "notebook"} {
@@ -149,7 +133,7 @@ func TestReadingTemplates(t *testing.T) {
 			require.ErrorContains(t, err, "ordinary Markdown")
 			assert.Empty(t, got)
 		}
-		_, err = RenderReport([]byte("# Markdown"), Options{Template: selector}, report.Analysis{}, report.ReportPlan{})
+		err = ValidateTemplateMode(Options{Template: selector}, true)
 		require.ErrorContains(t, err, "ordinary Markdown")
 	}
 }

@@ -1,6 +1,7 @@
-package render
+package reportview
 
 import (
+	render "github.com/dotcommander/html/internal/render"
 	"regexp"
 	"strings"
 	"testing"
@@ -39,7 +40,7 @@ func TestRenderReport_TabInitialFocusState(t *testing.T) {
 		},
 	}
 
-	got, err := RenderReport(src, Options{FallbackTitle: "scores"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "scores"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `role="tablist"`)
@@ -57,7 +58,7 @@ func TestRenderReport_SemanticTimelineUsesSingleDocumentParse(t *testing.T) {
 	src := []byte("# Release\n\n[guide]: https://example.com/release\n\n## Steps\n\n3. Read the [release guide][guide].\n\n   - Keep the checksum.\n   - Keep `release.json`.\n\n4. Run `go test ./...` for **v1.2.3**.\n")
 	analysis, plan := report.Plan(t.Context(), src, report.Options{Planner: report.PlannerOff})
 
-	got, err := RenderReport(src, Options{FallbackTitle: "release"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "release"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<ol start="3" class="report-timeline-list">`)
@@ -76,7 +77,7 @@ func TestRenderReport_SemanticTimelineSafeModeStillOmitsRawHTML(t *testing.T) {
 	src := []byte("# Release\n\n## Steps\n\n1. Keep <strong>safe</strong>.\n2. Drop <script>alert('xss')</script>.\n")
 	analysis, plan := report.Plan(t.Context(), src, report.Options{Planner: report.PlannerOff})
 
-	got, err := RenderReport(src, Options{FallbackTitle: "release", Safe: true}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "release", Safe: true}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `class="report-timeline-list"`)
@@ -91,7 +92,7 @@ func TestRenderReport_StaleSemanticPlanFallsBackToArticle(t *testing.T) {
 	analysis, plan := report.Plan(t.Context(), planned, report.Options{Planner: report.PlannerOff})
 	changed := []byte("# Release\n\n## Steps\n\n1. Test.\n2. Archive.\n")
 
-	got, err := RenderReport(changed, Options{FallbackTitle: "release"}, analysis, plan)
+	got, err := RenderReport(changed, render.Options{FallbackTitle: "release"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.NotContains(t, got, `class="report-timeline-list"`)
@@ -114,7 +115,7 @@ func TestRenderReport_TabbedLayoutWithSingleComponent(t *testing.T) {
 		},
 	}
 
-	got, err := RenderReport(src, Options{FallbackTitle: "main", SourceName: "main.go"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "main", SourceName: "main.go"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `class="report-tabs"`)
@@ -139,7 +140,7 @@ func TestRenderReport_SlidesLayout(t *testing.T) {
 		},
 	}
 
-	got, err := RenderReport(src, Options{FallbackTitle: "scores"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "scores"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `class="report-slides" data-report-slides`)
@@ -161,7 +162,7 @@ func TestRenderReport_MixedSummaryShowsSignalNames(t *testing.T) {
 	src := []byte("Notes\n- check deploy\n\nPayload\n{\"ok\":true}\n\nERROR failed\n")
 	analysis, plan := report.Plan(t.Context(), src, report.Options{Planner: report.PlannerOff})
 
-	got, err := RenderReport(src, Options{FallbackTitle: "mixed"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "mixed"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<dt>Kind</dt><dd>mixed</dd>`)
@@ -191,7 +192,7 @@ func TestRenderReport_PlainUsesTextOverview(t *testing.T) {
 
 	require.Equal(t, report.KindPlain, analysis.Kind)
 
-	got, err := RenderReport(src, Options{FallbackTitle: "notes"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "notes"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<dl class="text-overview" aria-label="Text overview">`)
@@ -207,7 +208,7 @@ func TestRenderReport_BinaryUsesSafePreview(t *testing.T) {
 	src := []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0x00, 0xff, 'h', 't', 'm', 'l'}
 	analysis, plan := report.Plan(t.Context(), src, report.Options{SourceName: "logo.png", Planner: report.PlannerOff})
 
-	got, err := RenderReport(src, Options{FallbackTitle: "logo"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "logo"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Equal(t, report.KindBinary, analysis.Kind)
@@ -237,7 +238,7 @@ func TestRenderReport_FilterStatusSingular(t *testing.T) {
 		},
 	}
 
-	got, err := RenderReport(src, Options{FallbackTitle: "scores"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "scores"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<p class="report-filter-status" aria-live="polite">1 row</p>`)
@@ -262,7 +263,7 @@ func TestRenderReport_DataTableIncludesFilterEmptyRow(t *testing.T) {
 		},
 	}
 
-	got, err := RenderReport(src, Options{FallbackTitle: "scores"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "scores"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<tr class="report-empty-row" data-report-empty-row hidden><td colspan="2">No rows match</td></tr>`)
@@ -283,7 +284,7 @@ func TestRenderReport_DataTableShowsEmptyInputRow(t *testing.T) {
 		},
 	}
 
-	got, err := RenderReport(src, Options{FallbackTitle: "scores"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "scores"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<p class="report-filter-status" aria-live="polite">0 rows</p>`)
@@ -308,7 +309,7 @@ func TestRenderReport_TranscriptUsesStructuredTurns(t *testing.T) {
 
 	require.Equal(t, report.KindTranscript, analysis.Kind)
 
-	got, err := RenderReport(src, Options{FallbackTitle: "transcript"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "transcript"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<dl class="transcript-overview" aria-label="Transcript overview"><div><dt>Turns</dt><dd>3</dd></div><div><dt>Speakers</dt><dd>2</dd></div></dl>`)
@@ -336,7 +337,7 @@ func TestRenderReport_TranscriptStripsANSI(t *testing.T) {
 
 	require.Equal(t, report.KindTranscript, analysis.Kind)
 
-	got, err := RenderReport(src, Options{FallbackTitle: "transcript"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "transcript"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<p>Welcome back.</p>`)
@@ -359,7 +360,7 @@ func TestRenderReport_LogUsesStructuredLines(t *testing.T) {
 		},
 	}
 
-	got, err := RenderReport(src, Options{FallbackTitle: "log"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "log"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<dl class="log-overview" aria-label="Log overview"><div><dt>Lines</dt><dd>2</dd></div><div><dt>Errors</dt><dd>1</dd></div><div><dt>Info</dt><dd>1</dd></div></dl>`)
@@ -387,7 +388,7 @@ func TestRenderReport_LogEscapesAndClassifiesGoTestLines(t *testing.T) {
 
 	require.Equal(t, report.KindLog, analysis.Kind)
 
-	got, err := RenderReport(src, Options{FallbackTitle: "go-test"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "go-test"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<dl class="log-overview" aria-label="Log overview"><div><dt>Lines</dt><dd>3</dd></div><div><dt>Errors</dt><dd>1</dd></div><div><dt>Info</dt><dd>1</dd></div></dl>`)
@@ -407,7 +408,7 @@ func TestRenderReport_AccessLogClassifiesHTTPStatus(t *testing.T) {
 	require.Equal(t, report.KindLog, analysis.Kind)
 	require.Contains(t, analysis.Reasons, "http access log markers")
 
-	got, err := RenderReport(src, Options{FallbackTitle: "access"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "access"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<dl class="log-overview" aria-label="Log overview"><div><dt>Lines</dt><dd>3</dd></div><div><dt>Errors</dt><dd>1</dd></div><div><dt>Warnings</dt><dd>1</dd></div><div><dt>Info</dt><dd>1</dd></div></dl>`)
@@ -426,7 +427,7 @@ func TestRenderReport_ForcedLogModeUsesStructuredLines(t *testing.T) {
 	require.Equal(t, report.KindPlain, analysis.Kind)
 	require.Equal(t, report.ModeConsole, plan.Mode)
 
-	got, err := RenderReport(src, Options{FallbackTitle: "forced-log"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "forced-log"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<h2>Log</h2>`)
@@ -452,7 +453,7 @@ func TestRenderReport_CodeBlockPreservesANSI(t *testing.T) {
 		},
 	}
 
-	got, err := RenderReport(src, Options{FallbackTitle: "main", SourceName: "main.go"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "main", SourceName: "main.go"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `class="language-ansi"`)
@@ -479,7 +480,7 @@ func TestRenderReport_SourceCodeShowsOverview(t *testing.T) {
 
 	require.Equal(t, report.KindSourceCode, analysis.Kind)
 
-	got, err := RenderReport(src, Options{FallbackTitle: "main", SourceName: "main.go"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "main", SourceName: "main.go"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<dl class="code-overview" aria-label="Code overview">`)
@@ -499,7 +500,7 @@ func TestRenderReport_ForcedCodeModeShowsOverview(t *testing.T) {
 	require.Equal(t, report.KindPlain, analysis.Kind)
 	require.Equal(t, report.ModeCode, plan.Mode)
 
-	got, err := RenderReport(src, Options{FallbackTitle: "forced-code", SourceName: "notes.txt"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "forced-code", SourceName: "notes.txt"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<h2>Code</h2>`)
@@ -518,7 +519,7 @@ func TestRenderReport_CodeOverviewReportsANSIRenderer(t *testing.T) {
 	src := []byte("\x1b[31mred\x1b[0m\n")
 	analysis, plan := report.Plan(t.Context(), src, report.Options{Mode: report.ModeOverrideCode, Planner: report.PlannerOff})
 
-	got, err := RenderReport(src, Options{FallbackTitle: "ansi", SourceName: "ansi.txt"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "ansi", SourceName: "ansi.txt"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<dt>Renderer</dt><dd>ANSI</dd>`)
@@ -540,7 +541,7 @@ func TestRenderReport_ArticleForcesMarkdownRendering(t *testing.T) {
 		},
 	}
 
-	got, err := RenderReport(src, Options{FallbackTitle: "doc", Plain: true}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "doc", Plain: true}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<h1 id="title">Title`)
@@ -567,7 +568,7 @@ func TestRenderReport_ArticleOverviewCountsSections(t *testing.T) {
 		},
 	}
 
-	got, err := RenderReport(src, Options{FallbackTitle: "doc"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "doc"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<dt>Lines</dt><dd>11</dd>`)
@@ -592,7 +593,7 @@ func TestRenderReport_ArticleOverviewCountsImages(t *testing.T) {
 		},
 	}
 
-	got, err := RenderReport(src, Options{FallbackTitle: "media"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "media"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<dt>Images</dt><dd>2</dd>`)
@@ -615,7 +616,7 @@ func TestRenderReport_ArticleOverviewCountsMarkdownPieces(t *testing.T) {
 		},
 	}
 
-	got, err := RenderReport(src, Options{FallbackTitle: "components"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "components"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<dt>Tables</dt><dd>1</dd>`)
@@ -644,7 +645,7 @@ func TestRenderReport_ArticleUsesMarkdownHeadingTitle(t *testing.T) {
 		},
 	}
 
-	got, err := RenderReport(src, Options{FallbackTitle: "file-name"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "file-name"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<title>Real Title</title>`)
@@ -667,7 +668,7 @@ func TestRenderReport_DiffViewStripsANSIBeforeClassifying(t *testing.T) {
 		},
 	}
 
-	got, err := RenderReport(src, Options{FallbackTitle: "patch"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "patch"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<div class="diff-summary" aria-label="Diff summary"><span><strong>1</strong> file</span><span><strong>1</strong> hunk</span><span class="diff-added"><strong>+1</strong> addition</span><span class="diff-removed"><strong>-1</strong> deletion</span></div>`)
@@ -683,7 +684,7 @@ func TestRenderReport_PatchFileUsesDiffView(t *testing.T) {
 	src := []byte("diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-old\n+new\n")
 	analysis, plan := report.Plan(t.Context(), src, report.Options{SourceName: "change.patch", Planner: report.PlannerOff})
 
-	got, err := RenderReport(src, Options{FallbackTitle: "change", SourceName: "change.patch"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "change", SourceName: "change.patch"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<h2>Diff</h2>`)
@@ -699,7 +700,7 @@ func TestRenderReport_PlainUnifiedDiffUsesDiffView(t *testing.T) {
 	src := []byte("--- old.txt\n+++ new.txt\n@@ -1 +1 @@\n-old\n+new\n")
 	analysis, plan := report.Plan(t.Context(), src, report.Options{Planner: report.PlannerOff})
 
-	got, err := RenderReport(src, Options{FallbackTitle: "change"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "change"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<dd>diff</dd>`)
@@ -718,7 +719,7 @@ func TestRenderReport_PlainUnifiedDiffCountsMultipleFiles(t *testing.T) {
 	src := []byte("--- a.txt\n+++ a.txt\n@@ -1 +1 @@\n-old\n+new\n--- b.txt\n+++ b.txt\n@@ -1 +1 @@\n-left\n+right\n")
 	analysis, plan := report.Plan(t.Context(), src, report.Options{Planner: report.PlannerOff})
 
-	got, err := RenderReport(src, Options{FallbackTitle: "change"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "change"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<dd>diff</dd>`)
@@ -734,7 +735,7 @@ func TestRenderReport_NoNewlineDiffMarkerUsesMetadataClass(t *testing.T) {
 	src := []byte("--- old.txt\n+++ new.txt\n@@ -1 +1 @@\n-old\n\\ No newline at end of file\n+new\n\\ No newline at end of file\n")
 	analysis, plan := report.Plan(t.Context(), src, report.Options{Planner: report.PlannerOff})
 
-	got, err := RenderReport(src, Options{FallbackTitle: "change"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "change"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<dd>diff</dd>`)
@@ -748,7 +749,7 @@ func TestRenderReport_DiffContentStartingWithFileHeaderMarkersUsesContentClass(t
 	src := []byte("--- old.txt\n+++ new.txt\n@@ -1,2 +1,2 @@\n---deleted heading\n+++added heading\n")
 	analysis, plan := report.Plan(t.Context(), src, report.Options{Planner: report.PlannerOff})
 
-	got, err := RenderReport(src, Options{FallbackTitle: "change"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "change"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<dd>diff</dd>`)
@@ -764,7 +765,7 @@ func TestRenderReport_CombinedDiffUsesDiffView(t *testing.T) {
 	src := []byte("diff --cc main.go\nindex 1111111,2222222..3333333\n--- a/main.go\n+++ b/main.go\n@@@ -1,1 -1,1 +1,1 @@@\n- left\n -right\n++merged\n")
 	analysis, plan := report.Plan(t.Context(), src, report.Options{Planner: report.PlannerOff})
 
-	got, err := RenderReport(src, Options{FallbackTitle: "merge"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "merge"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<dd>diff</dd>`)
@@ -784,7 +785,7 @@ func TestRenderReport_BinaryPatchUsesDiffView(t *testing.T) {
 	src := []byte("diff --git a/logo.png b/logo.png\nnew file mode 100644\nindex 0000000..1111111\nGIT binary patch\nliteral 0\nHcmV?d00001\n")
 	analysis, plan := report.Plan(t.Context(), src, report.Options{Planner: report.PlannerOff})
 
-	got, err := RenderReport(src, Options{FallbackTitle: "logo"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "logo"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<dd>diff</dd>`)
@@ -801,7 +802,7 @@ func TestRenderReport_ModeOnlyPatchUsesDiffView(t *testing.T) {
 	src := []byte("diff --git a/script.sh b/script.sh\nold mode 100644\nnew mode 100755\n")
 	analysis, plan := report.Plan(t.Context(), src, report.Options{Planner: report.PlannerOff})
 
-	got, err := RenderReport(src, Options{FallbackTitle: "script"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "script"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<dd>diff</dd>`)
@@ -818,7 +819,7 @@ func TestRenderReport_CopyOnlyPatchUsesDiffView(t *testing.T) {
 	src := []byte("diff --git a/source.txt b/copy.txt\ncopy from source.txt\ncopy to copy.txt\n")
 	analysis, plan := report.Plan(t.Context(), src, report.Options{Planner: report.PlannerOff})
 
-	got, err := RenderReport(src, Options{FallbackTitle: "copy"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "copy"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<dd>diff</dd>`)
@@ -835,7 +836,7 @@ func TestRenderReport_DiffViewDoesNotAddTrailingBlankLine(t *testing.T) {
 	src := []byte("diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-old\n+new\n")
 	analysis, plan := report.Plan(t.Context(), src, report.Options{SourceName: "change.patch", Planner: report.PlannerOff})
 
-	got, err := RenderReport(src, Options{FallbackTitle: "change", SourceName: "change.patch"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "change", SourceName: "change.patch"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.NotContains(t, got, `<span class="ctx"></span>`)
@@ -857,7 +858,7 @@ func TestRenderReport_FileTreeCleansASCIIMarkers(t *testing.T) {
 		},
 	}
 
-	got, err := RenderReport(src, Options{FallbackTitle: "tree"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "tree"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<li style="--depth:0"><span>cmd</span></li>`)
@@ -885,7 +886,7 @@ func TestRenderReport_FileTreeStripsANSI(t *testing.T) {
 		},
 	}
 
-	got, err := RenderReport(src, Options{FallbackTitle: "tree"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "tree"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<li style="--depth:0"><span>cmd</span></li>`)
@@ -911,7 +912,7 @@ func TestRenderReport_FileTreeDoesNotCountSpacesInsideUnicodeName(t *testing.T) 
 
 	require.Equal(t, report.KindTreeListing, analysis.Kind)
 
-	got, err := RenderReport(src, Options{FallbackTitle: "tree"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "tree"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<li style="--depth:0"><span>My    File</span></li>`)
@@ -935,7 +936,7 @@ func TestRenderReport_FileTreeParsesANSIColoredASCIIMarkers(t *testing.T) {
 
 	require.Equal(t, report.KindTreeListing, analysis.Kind)
 
-	got, err := RenderReport(src, Options{FallbackTitle: "tree"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "tree"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<li style="--depth:0"><span>cmd</span></li>`)
@@ -964,7 +965,7 @@ func TestRenderReport_FileTreeSkipsTreeSummary(t *testing.T) {
 
 	require.Equal(t, report.KindTreeListing, analysis.Kind)
 
-	got, err := RenderReport(src, Options{FallbackTitle: "tree"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "tree"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<dt>Files</dt><dd>3</dd>`)
@@ -992,7 +993,7 @@ func TestRenderReport_FileTreeSkipsDirectoryOnlyTreeSummary(t *testing.T) {
 
 	require.Equal(t, report.KindTreeListing, analysis.Kind)
 
-	got, err := RenderReport(src, Options{FallbackTitle: "tree"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "tree"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<dt>Files</dt><dd>3</dd>`)
@@ -1017,7 +1018,7 @@ func TestRenderReport_FileTreeTrimsDotSlashPathNames(t *testing.T) {
 		},
 	}
 
-	got, err := RenderReport(src, Options{FallbackTitle: "paths"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "paths"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<li style="--depth:1"><span>cmd/html</span></li>`)
@@ -1043,7 +1044,7 @@ func TestRenderReport_FileTreeSkipsBlankLines(t *testing.T) {
 
 	require.Equal(t, report.KindTreeListing, analysis.Kind)
 
-	got, err := RenderReport(src, Options{FallbackTitle: "paths"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "paths"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<li style="--depth:1"><span>cmd/html</span></li>`)
@@ -1071,7 +1072,7 @@ docs\README.md
 
 	require.Equal(t, report.KindTreeListing, analysis.Kind)
 
-	got, err := RenderReport(src, Options{FallbackTitle: "paths"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "paths"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<li style="--depth:1"><span>cmd\html</span></li>`)
@@ -1096,7 +1097,7 @@ func TestRenderReport_FileTreeDoesNotIndentWindowsDriveRoot(t *testing.T) {
 
 	require.Equal(t, report.KindTreeListing, analysis.Kind)
 
-	got, err := RenderReport(src, Options{FallbackTitle: "paths"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "paths"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<li style="--depth:1"><span>C:\Users\Alice</span></li>`)
@@ -1122,7 +1123,7 @@ func TestRenderReport_FileTreeRendersNumericPathNames(t *testing.T) {
 
 	require.Equal(t, report.KindTreeListing, analysis.Kind)
 
-	got, err := RenderReport(src, Options{FallbackTitle: "paths"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "paths"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<li style="--depth:1"><span>2024/01</span></li>`)
@@ -1147,7 +1148,7 @@ func TestRenderReport_FileTreeDoesNotIndentAbsolutePathRoot(t *testing.T) {
 
 	require.Equal(t, report.KindTreeListing, analysis.Kind)
 
-	got, err := RenderReport(src, Options{FallbackTitle: "paths"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "paths"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<li style="--depth:1"><span>/usr/bin</span></li>`)
@@ -1173,7 +1174,7 @@ func TestRenderReport_FileTreeDoesNotIndentParentRelativeAnchor(t *testing.T) {
 
 	require.Equal(t, report.KindTreeListing, analysis.Kind)
 
-	got, err := RenderReport(src, Options{FallbackTitle: "paths"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "paths"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<li style="--depth:1"><span>../src/main.go</span></li>`)
@@ -1199,7 +1200,7 @@ func TestRenderReport_FileTreeDoesNotIndentHomeRelativeAnchor(t *testing.T) {
 
 	require.Equal(t, report.KindTreeListing, analysis.Kind)
 
-	got, err := RenderReport(src, Options{FallbackTitle: "paths"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "paths"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<li style="--depth:1"><span>~/src/main.go</span></li>`)
@@ -1225,7 +1226,7 @@ func TestRenderReport_FileTreeRendersPathNamesWithSpaces(t *testing.T) {
 
 	require.Equal(t, report.KindTreeListing, analysis.Kind)
 
-	got, err := RenderReport(src, Options{FallbackTitle: "paths"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "paths"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<li style="--depth:1"><span>My Project/README.md</span></li>`)
@@ -1248,7 +1249,7 @@ func TestRenderReport_JSONTablePreservesLargeNumberText(t *testing.T) {
 		},
 	}
 
-	got, err := RenderReport(src, Options{FallbackTitle: "ids"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "ids"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `9007199254740993`)
@@ -1270,7 +1271,7 @@ func TestRenderReport_JSONTableDistinguishesNullFromMissing(t *testing.T) {
 		},
 	}
 
-	got, err := RenderReport(src, Options{FallbackTitle: "values"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "values"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, labeledCell("name", "has-null")+labeledCell("value", "null"))
@@ -1292,7 +1293,7 @@ func TestRenderReport_RecordCardsOmitEmptyFields(t *testing.T) {
 		},
 	}
 
-	got, err := RenderReport(src, Options{FallbackTitle: "values"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "values"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `class="record-card"`)
@@ -1327,7 +1328,7 @@ func TestRenderReport_RecordCardsShowEmptyState(t *testing.T) {
 		},
 	}
 
-	got, err := RenderReport(src, Options{FallbackTitle: "empty"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "empty"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<p class="record-empty" aria-live="polite">No records</p>`)
@@ -1350,7 +1351,7 @@ func TestRenderReport_RecordCardsPreferTitleFields(t *testing.T) {
 		},
 	}
 
-	got, err := RenderReport(src, Options{FallbackTitle: "values"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "values"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<h3>Record 1: First Title</h3>`)
@@ -1374,7 +1375,7 @@ func TestRenderReport_JSONTableIgnoresLeadingBOM(t *testing.T) {
 		},
 	}
 
-	got, err := RenderReport(src, Options{FallbackTitle: "ids"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "ids"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, labeledCell("id", "1"))
@@ -1388,7 +1389,7 @@ func TestRenderReport_JSONScalarFileRendersRawJSON(t *testing.T) {
 	src := []byte("9007199254740993\n")
 	analysis, plan := report.Plan(t.Context(), src, report.Options{SourceName: "value.json", Planner: report.PlannerOff})
 
-	got, err := RenderReport(src, Options{FallbackTitle: "value"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "value"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<dd>json-object</dd>`)
@@ -1404,7 +1405,7 @@ func TestRenderReport_JSONObjectShowsOverview(t *testing.T) {
 	src := []byte(`{"name":"alpha","score":10,"tags":["qa","html"],"meta":{"ok":true},"active":false}`)
 	analysis, plan := report.Plan(t.Context(), src, report.Options{SourceName: "object.json", Planner: report.PlannerOff})
 
-	got, err := RenderReport(src, Options{FallbackTitle: "object"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "object"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<dd>json-object</dd>`)
@@ -1424,7 +1425,7 @@ func TestRenderReport_JSONArrayShowsOverview(t *testing.T) {
 	src := []byte(`[1,"two",true]`)
 	analysis, plan := report.Plan(t.Context(), src, report.Options{SourceName: "array.json", Planner: report.PlannerOff})
 
-	got, err := RenderReport(src, Options{FallbackTitle: "array"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "array"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<dd>json-object</dd>`)
@@ -1438,7 +1439,7 @@ func TestRenderReport_JSONLinesTableUsesAnalyzedRecords(t *testing.T) {
 	src := []byte("{\"name\":\"a\",\"score\":1}\n{\"name\":\"b\",\"score\":2}\n")
 	analysis, plan := report.Plan(t.Context(), src, report.Options{SourceName: "events.jsonl", Planner: report.PlannerOff})
 
-	got, err := RenderReport(src, Options{FallbackTitle: "events"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "events"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `class="report-table"`)
@@ -1454,7 +1455,7 @@ func TestRenderReport_SingleJSONLineRecordRendersTable(t *testing.T) {
 	src := []byte("{\"name\":\"a\",\"score\":1}\n")
 	analysis, plan := report.Plan(t.Context(), src, report.Options{SourceName: "events.jsonl", Planner: report.PlannerOff})
 
-	got, err := RenderReport(src, Options{FallbackTitle: "events"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "events"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<dd>json-records</dd>`)
@@ -1470,7 +1471,7 @@ func TestRenderReport_SingleNDJSONRecordRendersTable(t *testing.T) {
 	src := []byte("{\"name\":\"a\",\"score\":1}\n")
 	analysis, plan := report.Plan(t.Context(), src, report.Options{SourceName: "events.ndjson", Planner: report.PlannerOff})
 
-	got, err := RenderReport(src, Options{FallbackTitle: "events"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "events"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<dd>json-records</dd>`)
@@ -1485,7 +1486,7 @@ func TestRenderReport_SingleJSONLinesRecordRendersTable(t *testing.T) {
 	src := []byte("{\"name\":\"a\",\"score\":1}\n")
 	analysis, plan := report.Plan(t.Context(), src, report.Options{SourceName: "events.jsonlines", Planner: report.PlannerOff})
 
-	got, err := RenderReport(src, Options{FallbackTitle: "events"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "events"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<dd>json-records</dd>`)
@@ -1509,7 +1510,7 @@ func TestRenderReport_CSVTablePreservesDuplicateHeaderCells(t *testing.T) {
 		},
 	}
 
-	got, err := RenderReport(src, Options{FallbackTitle: "tags"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "tags"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, sortHeaderButton("tag")+`<`)
@@ -1533,7 +1534,7 @@ func TestRenderReport_CSVTableDeduplicatesHeaderLabelCollisions(t *testing.T) {
 		},
 	}
 
-	got, err := RenderReport(src, Options{FallbackTitle: "tags"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "tags"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, sortHeaderButton("tag"))
@@ -1557,7 +1558,7 @@ func TestRenderReport_CSVTableLabelsBlankHeaders(t *testing.T) {
 		},
 	}
 
-	got, err := RenderReport(src, Options{FallbackTitle: "scores"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "scores"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, sortHeaderButton("Column 2"))
@@ -1583,7 +1584,7 @@ func TestRenderReport_CSVTablePreservesRecordSpaces(t *testing.T) {
 	require.Equal(t, report.KindCSVRecords, analysis.Kind)
 	require.Equal(t, 1, analysis.Stats.Records)
 
-	got, err := RenderReport(src, Options{FallbackTitle: "scores"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "scores"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, sortHeaderButton(" name"))
@@ -1609,7 +1610,7 @@ func TestRenderReport_TableStripsANSI(t *testing.T) {
 
 	require.Equal(t, report.KindCSVRecords, analysis.Kind)
 
-	got, err := RenderReport(src, Options{FallbackTitle: "scores"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "scores"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, sortHeaderButton("name"))
@@ -1635,7 +1636,7 @@ func TestRenderReport_TableDeduplicatesANSIHeaderLabels(t *testing.T) {
 
 	require.Equal(t, report.KindCSVRecords, analysis.Kind)
 
-	got, err := RenderReport(src, Options{FallbackTitle: "names"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "names"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, sortHeaderButton("name"))
@@ -1661,7 +1662,7 @@ func TestRenderReport_CSVTableUsesAnalyzerRows(t *testing.T) {
 	require.Equal(t, report.KindCSVRecords, analysis.Kind)
 	require.Equal(t, 1, analysis.Stats.Records)
 
-	got, err := RenderReport(src, Options{FallbackTitle: "scores"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "scores"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<p class="report-filter-status" aria-live="polite">1 row</p>`)
@@ -1687,7 +1688,7 @@ func TestRenderReport_TSVTableUsesAnalyzerRows(t *testing.T) {
 	require.Equal(t, report.KindTSVRecords, analysis.Kind)
 	require.Equal(t, 1, analysis.Stats.Records)
 
-	got, err := RenderReport(src, Options{FallbackTitle: "scores"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "scores"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<p class="report-filter-status" aria-live="polite">1 row</p>`)
@@ -1713,7 +1714,7 @@ func TestRenderReport_ASCIITableUsesAnalyzerRows(t *testing.T) {
 	require.Equal(t, report.KindTableRecords, analysis.Kind)
 	require.Equal(t, 2, analysis.Stats.Records)
 
-	got, err := RenderReport(src, Options{FallbackTitle: "mysql"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "mysql"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `<p class="report-filter-status" aria-live="polite">2 rows</p>`)
@@ -1735,7 +1736,7 @@ func TestRenderReport_SlidesSplitsMarkdownByH2(t *testing.T) {
 		Components: []report.Component{{Type: report.ComponentArticle, Source: "input", Title: "Deck", Options: map[string]string{}}},
 	}
 
-	got, err := RenderReport(src, Options{FallbackTitle: "deck"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "deck"}, analysis, plan)
 	require.NoError(t, err)
 
 	// h1+intro slide, then one slide per h2 = 3 slides.
@@ -1761,7 +1762,7 @@ func TestRenderReport_ReviewCardsRenderTextareasAndCopy(t *testing.T) {
 		},
 	}
 
-	got, err := RenderReport(src, Options{FallbackTitle: "values"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "values"}, analysis, plan)
 	require.NoError(t, err)
 
 	assert.Contains(t, got, `class="review-card"`)
@@ -1788,7 +1789,7 @@ func TestRenderReport_ReviewCommentKeysScopeDuplicateRows(t *testing.T) {
 		},
 	}
 
-	got, err := RenderReport(src, Options{FallbackTitle: "values"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "values"}, analysis, plan)
 	require.NoError(t, err)
 	attrs := regexp.MustCompile(`data-review-document="([0-9a-f]{64})" data-review-row="([0-9a-f]{64})" data-review-occurrence="([0-9]+)" data-review-label="([^"]*)"`).FindAllStringSubmatch(got, -1)
 	require.Len(t, attrs, 3)

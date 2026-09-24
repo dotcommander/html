@@ -9,25 +9,25 @@ import (
 	"github.com/dotcommander/html/internal/report"
 )
 
-// TemplateContractVersion changes when the author-facing context or execution
+// templateContractVersion changes when the author-facing context or execution
 // contract changes. It is part of every page's cache freshness fingerprint.
-const TemplateContractVersion = "1"
+const templateContractVersion = "1"
 
 const maxTemplateOutput = 64 << 20
 
-// documentFragment is renderer-owned HTML before page presentation. Only
+// DocumentFragment is renderer-owned HTML before page presentation. Only
 // ordinary Markdown has a separate TOC; report navigation stays inside body.
-type documentFragment struct {
-	escapedTitle string
-	body         string
+type DocumentFragment struct {
+	EscapedTitle string
+	Body         string
 	toc          string
 }
 
-func (f documentFragment) defaultBody() string {
+func (f DocumentFragment) DefaultBody() string {
 	if f.toc != "" {
-		return insertAfterFirstH1(f.body, f.toc)
+		return insertAfterFirstH1(f.Body, f.toc)
 	}
-	return f.body
+	return f.Body
 }
 
 // templateContext marks only renderer-produced fragments as trusted HTML.
@@ -55,13 +55,13 @@ func ValidateTemplateMode(opts Options, reportMode bool) error {
 	return nil
 }
 
-func assemblePage(f documentFragment, src []byte, opts Options) (string, error) {
-	head := pageHead(f.escapedTitle, f.body, opts)
+func AssemblePage(f DocumentFragment, src []byte, opts Options) (string, error) {
+	head := pageHead(f.EscapedTitle, f.Body, opts)
 	scripts := pageScripts()
 	if opts.Template == "" || opts.Template == "default" {
-		body := f.defaultBody()
+		body := f.DefaultBody()
 		if opts.Frame {
-			body = terminalFrame(f.escapedTitle, body)
+			body = TerminalFrame(f.EscapedTitle, body)
 		}
 		// Keep default page bytes stable, including its historical whitespace.
 		return fmt.Sprintf(`<!DOCTYPE html>
@@ -81,13 +81,13 @@ func assemblePage(f documentFragment, src []byte, opts Options) (string, error) 
 	if isReadingTemplate(opts.Template) {
 		source = mustReadAsset("assets/" + opts.Template + ".html.tmpl")
 	}
-	body := f.body
+	body := f.Body
 	if opts.Frame {
-		body = terminalFrame(f.escapedTitle, body)
+		body = TerminalFrame(f.EscapedTitle, body)
 	}
 	data, _ := report.DecodeJSON(src)
 	context := templateContext{
-		Title: htmlpkg.UnescapeString(f.escapedTitle), Content: template.HTML(body),
+		Title: htmlpkg.UnescapeString(f.EscapedTitle), Content: template.HTML(body),
 		TOC: template.HTML(f.toc), Data: data, Head: template.HTML(head),
 		Controls: template.HTML(pageControls), Scripts: template.HTML(scripts),
 	}

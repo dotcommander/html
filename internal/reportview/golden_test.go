@@ -1,8 +1,9 @@
-package render
+package reportview
 
 import (
 	"crypto/sha256"
 	"fmt"
+	render "github.com/dotcommander/html/internal/render"
 	"os"
 	"path/filepath"
 	"strings"
@@ -61,7 +62,7 @@ Portable output with **strong text**, ` + "`inline code`" + `, and a [link](http
 
 ` + "```go\nfmt.Println(\"stable\")\n```" + `
 `)
-	got, err := Render(src, Options{FallbackTitle: "render-contract", TOC: &toc})
+	got, err := render.Render(src, render.Options{FallbackTitle: "render-contract", TOC: &toc})
 	require.NoError(t, err)
 	return got
 }
@@ -69,7 +70,7 @@ Portable output with **strong text**, ` + "`inline code`" + `, and a [link](http
 func renderPlainGolden(t *testing.T) string {
 	t.Helper()
 	src := []byte("\x1b[32mPASS\x1b[0m render contract\nnext line\n")
-	got, err := Render(src, Options{FallbackTitle: "command-output", Plain: true, Frame: true})
+	got, err := render.Render(src, render.Options{FallbackTitle: "command-output", Plain: true, Frame: true})
 	require.NoError(t, err)
 	return got
 }
@@ -81,7 +82,7 @@ func renderReportGolden(t *testing.T) string {
 		SourceName: "scores.csv",
 		Planner:    report.PlannerOff,
 	})
-	got, err := RenderReport(src, Options{FallbackTitle: "scores", SourceName: "scores.csv"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "scores", SourceName: "scores.csv"}, analysis, plan)
 	require.NoError(t, err)
 	return got
 }
@@ -132,9 +133,9 @@ func TestRender_Metamorphic(t *testing.T) {
 			}
 			src.WriteString(blocks[rng.next(len(blocks))])
 		}
-		first, err := Render([]byte(src.String()), Options{FallbackTitle: "generated"})
+		first, err := render.Render([]byte(src.String()), render.Options{FallbackTitle: "generated"})
 		require.NoError(t, err, "case %d", i)
-		second, err := Render([]byte(src.String()), Options{FallbackTitle: "generated"})
+		second, err := render.Render([]byte(src.String()), render.Options{FallbackTitle: "generated"})
 		require.NoError(t, err, "case %d repeat", i)
 		assert.Equal(t, first, second, "case %d must be byte-deterministic", i)
 		assert.True(t, strings.HasPrefix(first, "<!DOCTYPE html>"), "case %d doctype", i)
@@ -149,10 +150,10 @@ func TestRender_MetamorphicEquivalentLineEndings(t *testing.T) {
 		strings.ReplaceAll(lf, "\n", "\r\n"),
 		strings.TrimSuffix(lf, "\n"),
 	}
-	want, err := Render([]byte(lf), Options{FallbackTitle: "line-endings"})
+	want, err := render.Render([]byte(lf), render.Options{FallbackTitle: "line-endings"})
 	require.NoError(t, err)
 	for _, variant := range variants {
-		got, err := Render([]byte(variant), Options{FallbackTitle: "line-endings"})
+		got, err := render.Render([]byte(variant), render.Options{FallbackTitle: "line-endings"})
 		require.NoError(t, err)
 		assert.Equal(t, want, got)
 	}
@@ -160,7 +161,7 @@ func TestRender_MetamorphicEquivalentLineEndings(t *testing.T) {
 
 func TestRender_MetamorphicSafeModeNeutralizesRawMarkup(t *testing.T) {
 	src := []byte("# Safe\n\n<script>alert('xss')</script>\n\n<iframe src=evil></iframe>\n\n**kept**\n")
-	got, err := Render(src, Options{FallbackTitle: "safe", Safe: true})
+	got, err := render.Render(src, render.Options{FallbackTitle: "safe", Safe: true})
 	require.NoError(t, err)
 	article := snapshotArticle(t, got)
 	assert.NotContains(t, article, "<script")

@@ -21,7 +21,7 @@ func ImageDependencyFingerprint(src []byte, baseDir string) string {
 	if baseDir == "" {
 		return ""
 	}
-	node := mdUnsafe.Parser().Parse(text.NewReader(src))
+	node := MdUnsafe.Parser().Parse(text.NewReader(src))
 	seen := map[string]bool{}
 	var deps []string
 	_ = ast.Walk(node, func(n ast.Node, entering bool) (ast.WalkStatus, error) {

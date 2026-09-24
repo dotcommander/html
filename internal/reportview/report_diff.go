@@ -1,7 +1,8 @@
-package render
+package reportview
 
 import (
 	"fmt"
+	render "github.com/dotcommander/html/internal/render"
 	htmlpkg "html"
 	"strings"
 )
@@ -18,10 +19,10 @@ func diffView(src []byte) string {
 	combinedPrefixCols := 0
 	inHunk := false
 	for i, line := range lines {
-		clean := string(reANSI.ReplaceAll([]byte(line), nil))
+		clean := string(render.ReANSI.ReplaceAll([]byte(line), nil))
 		nextClean := ""
 		if i+1 < len(lines) {
-			nextClean = string(reANSI.ReplaceAll([]byte(lines[i+1]), nil))
+			nextClean = string(render.ReANSI.ReplaceAll([]byte(lines[i+1]), nil))
 		}
 		class := "ctx"
 		switch {

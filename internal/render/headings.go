@@ -25,13 +25,13 @@ type heading struct {
 	id    string // goldmark auto-generated heading id
 }
 
-// analyze walks an already-parsed document node and returns the page title
+// Analyze walks an already-parsed document node and returns the page title
 // (first level-1 heading text, HTML-escaped and trimmed, or the escaped
 // fallback), whether that title came from a real heading, and the h2/h3
 // headings (in document order) used to build the table of contents. ids are
 // read straight from the parsed AST, so TOC links match the ids goldmark
 // renders into the body.
-func analyze(node ast.Node, src []byte, fallback string) (title string, fromHeading bool, headings []heading) {
+func Analyze(node ast.Node, src []byte, fallback string) (title string, fromHeading bool, headings []heading) {
 	_ = ast.Walk(node, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering {
 			return ast.WalkContinue, nil

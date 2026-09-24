@@ -1,9 +1,10 @@
-package render
+package reportview
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	render "github.com/dotcommander/html/internal/render"
 	htmlpkg "html"
 	"strconv"
 	"strings"
@@ -12,23 +13,23 @@ import (
 )
 
 func rawPre(src []byte) string {
-	if reANSI.Match(src) {
-		return renderANSI(src)
+	if render.ReANSI.Match(src) {
+		return render.RenderANSI(src)
 	}
-	clean := reANSI.ReplaceAll(src, nil)
+	clean := render.ReANSI.ReplaceAll(src, nil)
 	return `<pre><code class="language-plaintext">` + htmlpkg.EscapeString(string(clean)) + `</code></pre>`
 }
 
 func textView(src []byte) string {
-	clean := reANSI.ReplaceAll(src, nil)
+	clean := render.ReANSI.ReplaceAll(src, nil)
 	return textOverview(clean) + textPre(src)
 }
 
 func textPre(src []byte) string {
-	if reANSI.Match(src) {
-		return renderANSI(src)
+	if render.ReANSI.Match(src) {
+		return render.RenderANSI(src)
 	}
-	clean := reANSI.ReplaceAll(src, nil)
+	clean := render.ReANSI.ReplaceAll(src, nil)
 	return `<pre class="report-text"><code class="language-plaintext">` + htmlpkg.EscapeString(string(clean)) + `</code></pre>`
 }
 
@@ -108,7 +109,7 @@ func asciiBytes(src []byte) string {
 func jsonView(src []byte, analysis report.Analysis) string {
 	var pretty bytes.Buffer
 	body := src
-	if err := json.Indent(&pretty, stripUTF8BOM(src), "", "  "); err == nil {
+	if err := json.Indent(&pretty, render.StripUTF8BOM(src), "", "  "); err == nil {
 		body = pretty.Bytes()
 	}
 	overview := jsonOverview(analysis.Data)
@@ -119,7 +120,7 @@ func jsonView(src []byte, analysis report.Analysis) string {
 }
 
 func jsonPre(src []byte) string {
-	clean := reANSI.ReplaceAll(src, nil)
+	clean := render.ReANSI.ReplaceAll(src, nil)
 	return `<pre class="json-source"><code class="language-json">` + htmlpkg.EscapeString(string(clean)) + `</code></pre>`
 }
 
@@ -130,7 +131,7 @@ func jsonOverview(data any) string {
 		for k := range v {
 			keysMap[k] = true
 		}
-		keys := sortedStringKeys(keysMap)
+		keys := render.SortedStringKeys(keysMap)
 		if len(keys) == 0 {
 			return `<div class="json-overview" aria-label="JSON overview"><span>empty object</span></div>`
 		}

@@ -1,7 +1,8 @@
-package render
+package reportview
 
 import (
 	"fmt"
+	render "github.com/dotcommander/html/internal/render"
 	htmlpkg "html"
 	"path"
 	"strconv"
@@ -58,7 +59,7 @@ func nonEmptyTreeLines(text string) []string {
 	raw := strings.Split(text, "\n")
 	lines := make([]string, 0, len(raw))
 	for _, line := range raw {
-		clean := string(reANSI.ReplaceAll([]byte(line), nil))
+		clean := string(render.ReANSI.ReplaceAll([]byte(line), nil))
 		if strings.TrimSpace(clean) != "" && !isTreeRootLine(clean) && !isTreeSummaryLine(clean) {
 			lines = append(lines, clean)
 		}
@@ -164,17 +165,4 @@ func trimWindowsVolumeAnchor(path string) string {
 
 func isASCIILetter(b byte) bool {
 	return b >= 'A' && b <= 'Z' || b >= 'a' && b <= 'z'
-}
-
-func sortedStringKeys(m map[string]bool) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	for i := 1; i < len(keys); i++ {
-		for j := i; j > 0 && keys[j] < keys[j-1]; j-- {
-			keys[j], keys[j-1] = keys[j-1], keys[j]
-		}
-	}
-	return keys
 }

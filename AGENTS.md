@@ -99,12 +99,9 @@ cmd/html/main.go            entrypoint (<20 lines), prints errors with "html:" p
   └─ internal/cli/root.go   standard flag wiring, metadata paths, and argument normalization
        └─ internal/actions/run.go   orchestration (stat → cache check → render → open)
             ├─ internal/cache/cache.go    cache key, freshness, atomic write
-            ├─ internal/render/
-                 ├─ render.go   goldmark GFM pipeline + h1 title extraction
-                 ├─ report*.go report layouts and semantic component rendering
-                 ├─ page.go     chroma CSS generation + HTML5 wrapper
-                 └─ embed.go    //go:embed assets/base.css + assets/copy.js
-            └─ internal/report/ analysis, report planning, and shared report types
+            ├─ internal/render/           document pipeline, page assembly, embedded assets
+            ├─ internal/reportview/        report views: layouts and semantic component rendering
+            └─ internal/report/            analysis, report planning, and shared report types
 ```
 
 **`actions.Run`** is the orchestrator: it validates and reads the source through
@@ -112,7 +109,9 @@ cmd/html/main.go            entrypoint (<20 lines), prints errors with "html:" p
 and atomically writes the cache or stable output. It opens the result unless
 `--no-open`. The fallback title is the source basename without extension.
 
-**`render.Render(src, opts)`** parses once through a package-level `goldmark` singleton (`render.go`), then walks that AST for title and heading metadata. `wrapPage` inlines everything — `baseCSS()` + generated chroma CSS into one `<style>`, `copyJS()` into one `<script>` — producing a zero-external-resource document. Report mode analyzes and plans through `internal/report/`, then renders semantic components through `internal/render/report*.go`.
+**`render.Render(src, opts)`** parses once through a package-level `goldmark` singleton (`render.go`), then walks that AST for title and heading metadata. `wrapPage` inlines everything — `baseCSS()` + generated chroma CSS into one `<style>`, `copyJS()` into one `<script>` — producing a zero-external-resource document. Report mode analyzes and plans through `internal/report/`, then renders semantic components through `internal/reportview`, which imports
+the page-assembly seam (`render.AssemblePage`, `render.DocumentFragment`,
+highlight and ANSI services) from `internal/render`.
 
 ### Load-bearing design decisions (and where they live)
 

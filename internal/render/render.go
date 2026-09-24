@@ -10,6 +10,7 @@ import (
 	"github.com/dotcommander/html/internal/report"
 	"github.com/yuin/goldmark"
 	highlighting "github.com/yuin/goldmark-highlighting/v2"
+	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
 	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
@@ -69,11 +70,11 @@ func newMarkdownWithImageLimit(unsafe bool, codeTheme string, imageLimit int64, 
 	return goldmark.New(opts...)
 }
 
-// Package-level singletons — immutable after init. mdUnsafe (the default) passes
-// raw HTML through; mdSafe omits it.
+// Package-level singletons — immutable after init. MdUnsafe (the default) passes
+// raw HTML through; MdSafe omits it.
 var (
-	mdUnsafe = newMarkdown(true, "")
-	mdSafe   = newMarkdown(false, "")
+	MdUnsafe = newMarkdown(true, "")
+	MdSafe   = newMarkdown(false, "")
 )
 
 // markdownPipeline is the single home for goldmark pipeline selection under
@@ -90,9 +91,9 @@ func markdownPipeline(opts Options, refs []report.SourceRef) goldmark.Markdown {
 	case opts.CodeTheme != "":
 		return newMarkdown(!opts.Safe, opts.CodeTheme)
 	case opts.Safe:
-		return mdSafe
+		return MdSafe
 	default:
-		return mdUnsafe
+		return MdUnsafe
 	}
 }
 
@@ -122,19 +123,19 @@ func RenderWithDiagnostics(src []byte, opts Options) (string, []ImageDiagnostic,
 		return "", nil, err
 	}
 	if opts.Plain {
-		page, err := assemblePage(documentFragment{escapedTitle: htmlpkg.EscapeString(opts.FallbackTitle), body: renderPlain(src, opts)}, src, opts)
+		page, err := AssemblePage(DocumentFragment{EscapedTitle: htmlpkg.EscapeString(opts.FallbackTitle), Body: renderPlain(src, opts)}, src, opts)
 		return page, nil, err
 	}
-	fragment, diagnostics, err := renderMarkdownFragment(src, opts)
+	fragment, diagnostics, err := RenderMarkdownFragment(src, opts)
 	if err != nil {
 		return "", diagnostics, err
 	}
-	page, err := assemblePage(fragment, src, opts)
+	page, err := AssemblePage(fragment, src, opts)
 	return page, diagnostics, err
 }
 
-func renderMarkdownFragment(src []byte, opts Options) (documentFragment, []ImageDiagnostic, error) {
-	md := markdownPipeline(opts, opts.semanticLists)
+func RenderMarkdownFragment(src []byte, opts Options) (DocumentFragment, []ImageDiagnostic, error) {
+	md := markdownPipeline(opts, opts.SemanticLists)
 	pc := parser.NewContext()
 	pc.Set(baseDirKey, opts.SourceDir)
 	if opts.RebaseLocalLinks {
@@ -143,9 +144,9 @@ func renderMarkdownFragment(src []byte, opts Options) (documentFragment, []Image
 	doc := md.Parser().Parse(text.NewReader(src), parser.WithContext(pc))
 	var buf bytes.Buffer
 	if err := md.Renderer().Render(&buf, src, doc); err != nil {
-		return documentFragment{}, nil, err
+		return DocumentFragment{}, nil, err
 	}
-	title, fromHeading, headings := analyze(doc, src, opts.FallbackTitle)
+	title, fromHeading, headings := Analyze(doc, src, opts.FallbackTitle)
 	content := buf.String()
 	if !fromHeading {
 		// The document has no usable level-1 heading, so it would open with no
@@ -155,7 +156,7 @@ func renderMarkdownFragment(src []byte, opts Options) (documentFragment, []Image
 		// h1 are left untouched. title is already HTML-escaped.
 		content = "<h1>" + title + "</h1>\n" + content
 	}
-	fragment := documentFragment{escapedTitle: title, body: content}
+	fragment := DocumentFragment{EscapedTitle: title, Body: content}
 	if shouldRenderTOC(opts.TOC, len(headings)) {
 		fragment.toc = buildTOC(headings)
 	}
@@ -183,4 +184,37 @@ func imageDiagnostics(pc parser.Context) []ImageDiagnostic {
 		return nil
 	}
 	return append([]ImageDiagnostic(nil), state.diagnostics...)
+}
+
+type semanticListTransformer struct {
+	refs []report.SourceRef
+}
+
+func (transformer semanticListTransformer) Transform(doc *ast.Document, reader text.Reader, _ parser.Context) {
+	src := reader.Source()
+	wanted := make(map[[2]int]struct{}, len(transformer.refs))
+	for _, ref := range transformer.refs {
+		wanted[[2]int{ref.Start, ref.End}] = struct{}{}
+	}
+	_ = ast.Walk(doc, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		list, ok := node.(*ast.List)
+		if !ok || !list.IsOrdered() {
+			return ast.WalkContinue, nil
+		}
+		start, end, ok := report.SourceRangeForNode(list, src)
+		if !ok {
+			return ast.WalkContinue, nil
+		}
+		if _, ok := wanted[[2]int{start, end}]; !ok {
+			return ast.WalkContinue, nil
+		}
+		list.SetAttributeString("class", []byte("report-timeline-list"))
+		for item := list.FirstChild(); item != nil; item = item.NextSibling() {
+			item.SetAttributeString("class", []byte("report-timeline-item"))
+		}
+		return ast.WalkSkipChildren, nil
+	})
 }

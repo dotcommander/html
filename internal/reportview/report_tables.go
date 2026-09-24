@@ -1,10 +1,11 @@
-package render
+package reportview
 
 import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	render "github.com/dotcommander/html/internal/render"
 	htmlpkg "html"
 	"strconv"
 	"strings"
@@ -13,11 +14,11 @@ import (
 )
 
 func dataTable(src []byte, analysis report.Analysis) string {
-	headers, rows := tableRows(src, analysis)
+	headers, rows := render.TableRows(src, analysis)
 	if len(headers) == 0 {
 		return rawPre(src)
 	}
-	labels := headerLabels(headers)
+	labels := render.HeaderLabels(headers)
 	var b strings.Builder
 	fmt.Fprintf(&b, `<div class="report-table-wrap"><input class="report-filter" type="search" placeholder="Filter rows" aria-label="Filter rows"><div class="report-mobile-sort"><select aria-label="Sort rows"><option value="">Sort rows</option>`)
 	for i, label := range labels {
@@ -76,7 +77,7 @@ func emptyTableText(emptyInput bool) string {
 func recordCardFromRow(n int, labels, row []string, stats *recordCardStats) recordCard {
 	card := recordCard{Title: recordCardTitle(n, labels, row)}
 	for j, label := range labels {
-		if j >= len(row) || strings.TrimSpace(cleanTableText(row[j])) == "" {
+		if j >= len(row) || strings.TrimSpace(render.CleanTableText(row[j])) == "" {
 			continue
 		}
 		card.Fields = append(card.Fields, recordCardField{Label: label, Value: row[j]})
@@ -86,14 +87,14 @@ func recordCardFromRow(n int, labels, row []string, stats *recordCardStats) reco
 }
 
 func recordCards(src []byte, analysis report.Analysis) string {
-	headers, rows := tableRows(src, analysis)
+	headers, rows := render.TableRows(src, analysis)
 	if len(headers) == 0 {
 		return rawPre(src)
 	}
 	if len(rows) == 0 {
 		return `<p class="record-empty" aria-live="polite">No records</p>`
 	}
-	labels := headerLabels(headers)
+	labels := render.HeaderLabels(headers)
 	cards := make([]recordCard, 0, len(rows))
 	stats := recordCardStats{Cards: len(rows)}
 	for i, row := range rows {
@@ -146,7 +147,7 @@ func recordCardTitle(n int, labels, row []string) string {
 			if !strings.EqualFold(strings.TrimSpace(label), preferred) || i >= len(row) {
 				continue
 			}
-			value := strings.TrimSpace(cleanTableText(row[i]))
+			value := strings.TrimSpace(render.CleanTableText(row[i]))
 			if value == "" {
 				continue
 			}
@@ -165,7 +166,7 @@ func recordLabel(n int, labels, row []string) string {
 			if !strings.EqualFold(strings.TrimSpace(label), preferred) || i >= len(row) {
 				continue
 			}
-			value := strings.TrimSpace(cleanTableText(row[i]))
+			value := strings.TrimSpace(render.CleanTableText(row[i]))
 			if value == "" {
 				continue
 			}
@@ -193,14 +194,14 @@ func canonicalRowDigest(labels, row []string) string {
 // persistence) and a single top-level "Copy all comments" button. The
 // interactive behavior lives in report.js.
 func reviewCards(src []byte, analysis report.Analysis) string {
-	headers, rows := tableRows(src, analysis)
+	headers, rows := render.TableRows(src, analysis)
 	if len(headers) == 0 {
 		return rawPre(src)
 	}
 	if len(rows) == 0 {
 		return `<p class="record-empty" aria-live="polite">No records</p>`
 	}
-	labels := headerLabels(headers)
+	labels := render.HeaderLabels(headers)
 	type reviewItem struct {
 		card       recordCard
 		rowDigest  string

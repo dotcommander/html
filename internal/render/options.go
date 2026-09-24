@@ -65,9 +65,9 @@ type Options struct {
 	// ReportTag distinguishes report-plan renders from legacy Markdown/plain
 	// renders in the cache fingerprint. Empty preserves legacy cache behavior.
 	ReportTag string
-	// semanticLists is internal report-renderer state. Each ref identifies an
+	// SemanticLists is internal report-renderer state. Each ref identifies an
 	// ordered list styled during the same full-document Markdown parse.
-	semanticLists []report.SourceRef
+	SemanticLists []report.SourceRef
 }
 
 // cacheTag encodes the Options fields that change rendered output, so the
@@ -76,7 +76,7 @@ type Options struct {
 // here. Extend this when adding a new output-affecting option.
 func (o Options) cacheTag() string {
 	var b strings.Builder
-	appendCacheTag(&b, "template-contract", TemplateContractVersion)
+	appendCacheTag(&b, "template-contract", templateContractVersion)
 	selector := o.Template
 	if selector == "" {
 		selector = "default"

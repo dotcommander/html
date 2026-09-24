@@ -92,7 +92,7 @@ func TestRender_NoDuplicateHeading(t *testing.T) {
 func TestRender_TitleEscaped(t *testing.T) {
 	t.Parallel()
 
-	// analyze walks only *ast.Text/*ast.String descendants; inline HTML nodes
+	// Analyze walks only *ast.Text/*ast.String descendants; inline HTML nodes
 	// (RawHTML) are intentionally skipped. So "# A & B <tag>" yields title
 	// "A & B", which is then HTML-escaped to "A &amp; B". The <tag> is dropped.
 	src := []byte("# A & B <tag>\n")

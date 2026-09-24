@@ -45,12 +45,12 @@ func (s ansiStyle) css() string {
 	return strings.Join(p, ";")
 }
 
-// renderANSI converts ANSI/SGR-colored text into an HTML <pre><code> with inline-
+// RenderANSI converts ANSI/SGR-colored text into an HTML <pre><code> with inline-
 // styled <span>s, so the colors of piped terminal output (git diff --color,
 // tree -C, ls --color) survive into the page. Only SGR (ESC[…m) sequences are
 // interpreted; any other escape sequence (cursor moves, screen clears) is
 // dropped. Text between sequences is HTML-escaped as whole UTF-8 runs.
-func renderANSI(src []byte) string {
+func RenderANSI(src []byte) string {
 	var b strings.Builder
 	b.WriteString(`<pre><code class="language-ansi">`)
 	var cur ansiStyle

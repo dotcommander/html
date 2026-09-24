@@ -1,24 +1,25 @@
-package render
+package reportview
 
 import (
 	"bytes"
+	render "github.com/dotcommander/html/internal/render"
 	"strconv"
 	"strings"
 )
 
-func articleView(src []byte, opts Options) (string, error) {
+func articleView(src []byte, opts render.Options) (string, error) {
 	mdOpts := opts
 	mdOpts.ReportTag = ""
 	mdOpts.Plain = false
-	fragment, _, err := renderMarkdownFragment(src, mdOpts)
+	fragment, _, err := render.RenderMarkdownFragment(src, mdOpts)
 	if err != nil {
 		return "", err
 	}
 	// Preserve the report's internal TOC and article whitespace without executing
 	// a page template (which may omit .Content entirely).
-	article := fragment.defaultBody()
+	article := fragment.DefaultBody()
 	if opts.Frame {
-		article = terminalFrame(fragment.escapedTitle, article)
+		article = render.TerminalFrame(fragment.EscapedTitle, article)
 	}
 	article = "\n" + article + "\n  "
 	return articleOverview(src, article) + article, nil

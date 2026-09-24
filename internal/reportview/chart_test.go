@@ -1,7 +1,8 @@
-package render
+package reportview
 
 import (
 	"fmt"
+	render "github.com/dotcommander/html/internal/render"
 	"strings"
 	"testing"
 
@@ -150,7 +151,7 @@ func TestRenderReportChartDiagnosticPreservesSiblings(t *testing.T) {
 		},
 	}
 
-	got, err := RenderReport(src, Options{FallbackTitle: "scores"}, analysis, plan)
+	got, err := RenderReport(src, render.Options{FallbackTitle: "scores"}, analysis, plan)
 	require.NoError(t, err)
 	assert.Contains(t, got, `class="report-summary"`)
 	assert.Contains(t, got, `Chart unavailable:`)

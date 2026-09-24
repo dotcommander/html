@@ -1,7 +1,8 @@
-package render
+package reportview
 
 import (
 	"fmt"
+	render "github.com/dotcommander/html/internal/render"
 	htmlpkg "html"
 	"math"
 	"strconv"
@@ -32,7 +33,7 @@ func chartView(src []byte, analysis report.Analysis, options map[string]string) 
 	if typ := strings.TrimSpace(options["type"]); typ != "" && typ != "bar" {
 		return chartDiagnostic("only horizontal bar charts are supported")
 	}
-	headers, rows := tableRows(src, analysis)
+	headers, rows := render.TableRows(src, analysis)
 	if len(headers) == 0 {
 		return chartDiagnostic("record columns are unavailable")
 	}
@@ -56,8 +57,8 @@ func chartView(src []byte, analysis report.Analysis, options map[string]string) 
 		if x >= len(row) || y >= len(row) {
 			return chartDiagnostic("a record is missing a selected chart value")
 		}
-		category := strings.TrimSpace(cleanTableText(row[x]))
-		valueText := strings.TrimSpace(cleanTableText(row[y]))
+		category := strings.TrimSpace(render.CleanTableText(row[x]))
+		valueText := strings.TrimSpace(render.CleanTableText(row[y]))
 		value, valid := finiteNumber(valueText)
 		if category == "" || !valid {
 			return chartDiagnostic("chart categories must be nonempty and numeric values must be finite")
@@ -122,7 +123,7 @@ func columnIsNumeric(rows [][]string, column int) bool {
 		if column >= len(row) {
 			return false
 		}
-		if _, ok := finiteNumber(strings.TrimSpace(cleanTableText(row[column]))); !ok {
+		if _, ok := finiteNumber(strings.TrimSpace(render.CleanTableText(row[column]))); !ok {
 			return false
 		}
 	}
@@ -134,7 +135,7 @@ func columnIsCategorical(rows [][]string, column int) bool {
 		return false
 	}
 	for _, row := range rows {
-		if column >= len(row) || strings.TrimSpace(cleanTableText(row[column])) == "" {
+		if column >= len(row) || strings.TrimSpace(render.CleanTableText(row[column])) == "" {
 			return false
 		}
 	}

@@ -1,22 +1,19 @@
-package render
+package reportview
 
 import (
 	"fmt"
+	render "github.com/dotcommander/html/internal/render"
 	htmlpkg "html"
 	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/dotcommander/html/internal/report"
-	"github.com/yuin/goldmark/ast"
-	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/text"
 )
 
-var utf8BOM = []byte{0xef, 0xbb, 0xbf}
-
-func RenderReport(src []byte, opts Options, analysis report.Analysis, plan report.ReportPlan) (string, error) {
-	if err := ValidateTemplateMode(opts, true); err != nil {
+func RenderReport(src []byte, opts render.Options, analysis report.Analysis, plan report.ReportPlan) (string, error) {
+	if err := render.ValidateTemplateMode(opts, true); err != nil {
 		return "", err
 	}
 	if err := report.ValidateComponentSources(src, plan.Components); err != nil {
@@ -31,28 +28,28 @@ func RenderReport(src []byte, opts Options, analysis report.Analysis, plan repor
 	if err != nil {
 		return "", err
 	}
-	return assemblePage(documentFragment{escapedTitle: title, body: body}, src, opts)
+	return render.AssemblePage(render.DocumentFragment{EscapedTitle: title, Body: body}, src, opts)
 }
 
-func reportTitle(src []byte, opts Options, analysis report.Analysis) string {
+func reportTitle(src []byte, opts render.Options, analysis report.Analysis) string {
 	if analysis.Kind != report.KindMarkdown {
 		return htmlpkg.EscapeString(opts.FallbackTitle)
 	}
-	md := mdUnsafe
+	md := render.MdUnsafe
 	if opts.Safe {
-		md = mdSafe
+		md = render.MdSafe
 	}
 	doc := md.Parser().Parse(text.NewReader(src))
-	title, _, _ := analyze(doc, src, opts.FallbackTitle)
+	title, _, _ := render.Analyze(doc, src, opts.FallbackTitle)
 	return title
 }
 
-func renderReportBody(src []byte, opts Options, analysis report.Analysis, plan report.ReportPlan) (string, error) {
+func renderReportBody(src []byte, opts render.Options, analysis report.Analysis, plan report.ReportPlan) (string, error) {
 	if refs := semanticTimelineLists(plan.Components); len(refs) > 0 {
 		// Deliberate local wiring: opts is a value copy, so this write only
 		// carries refs into articleView's parse (field contract: options.go);
-		// the caller's Options are unaffected.
-		opts.semanticLists = refs
+		// the caller's render.Options are unaffected.
+		opts.SemanticLists = refs
 		return articleView(src, opts)
 	}
 	switch plan.Layout {
@@ -72,7 +69,7 @@ func renderReportBody(src []byte, opts Options, analysis report.Analysis, plan r
 	return b.String(), nil
 }
 
-func renderTabs(src []byte, opts Options, analysis report.Analysis, components []report.Component) (string, error) {
+func renderTabs(src []byte, opts render.Options, analysis report.Analysis, components []report.Component) (string, error) {
 	var buttons strings.Builder
 	var panels strings.Builder
 	for i, c := range components {
@@ -132,7 +129,7 @@ var articleCodeBlockRe = regexp.MustCompile(`(?i)<pre(?:\s|>)`)
 var articleTaskRe = regexp.MustCompile(`(?i)<input\b[^>]*\btype="checkbox"`)
 var articleBlockquoteRe = regexp.MustCompile(`(?i)<blockquote(?:\s|>)`)
 
-func renderSlides(src []byte, opts Options, analysis report.Analysis, components []report.Component) (string, error) {
+func renderSlides(src []byte, opts render.Options, analysis report.Analysis, components []report.Component) (string, error) {
 	var units []slideUnit
 	for _, c := range components {
 		part, err := renderReportComponent(src, opts, analysis, c)
@@ -159,7 +156,7 @@ func renderSlides(src []byte, opts Options, analysis report.Analysis, components
 	return b.String(), nil
 }
 
-func renderReportComponent(src []byte, opts Options, analysis report.Analysis, c report.Component) (string, error) {
+func renderReportComponent(src []byte, opts render.Options, analysis report.Analysis, c report.Component) (string, error) {
 	title := htmlpkg.EscapeString(c.Title)
 	switch c.Type {
 	case report.ComponentArticle:
@@ -235,37 +232,4 @@ func semanticTimelineLists(components []report.Component) []report.SourceRef {
 		}
 	}
 	return refs
-}
-
-type semanticListTransformer struct {
-	refs []report.SourceRef
-}
-
-func (transformer semanticListTransformer) Transform(doc *ast.Document, reader text.Reader, _ parser.Context) {
-	src := reader.Source()
-	wanted := make(map[[2]int]struct{}, len(transformer.refs))
-	for _, ref := range transformer.refs {
-		wanted[[2]int{ref.Start, ref.End}] = struct{}{}
-	}
-	_ = ast.Walk(doc, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
-		if !entering {
-			return ast.WalkContinue, nil
-		}
-		list, ok := node.(*ast.List)
-		if !ok || !list.IsOrdered() {
-			return ast.WalkContinue, nil
-		}
-		start, end, ok := report.SourceRangeForNode(list, src)
-		if !ok {
-			return ast.WalkContinue, nil
-		}
-		if _, ok := wanted[[2]int{start, end}]; !ok {
-			return ast.WalkContinue, nil
-		}
-		list.SetAttributeString("class", []byte("report-timeline-list"))
-		for item := list.FirstChild(); item != nil; item = item.NextSibling() {
-			item.SetAttributeString("class", []byte("report-timeline-item"))
-		}
-		return ast.WalkSkipChildren, nil
-	})
 }

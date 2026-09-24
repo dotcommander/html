@@ -1,7 +1,8 @@
-package render
+package reportview
 
 import (
 	"fmt"
+	render "github.com/dotcommander/html/internal/render"
 	htmlpkg "html"
 	"strconv"
 	"strings"
@@ -9,27 +10,27 @@ import (
 	"github.com/dotcommander/html/internal/report"
 )
 
-func codeBlock(src []byte, opts Options) string {
-	if reANSI.Match(src) {
-		return renderANSI(src)
+func codeBlock(src []byte, opts render.Options) string {
+	if render.ReANSI.Match(src) {
+		return render.RenderANSI(src)
 	}
-	if lexer := pickLexer(opts.Lang, opts.SourceName, src); lexer != nil {
-		if html, err := highlightCode(string(src), lexer, opts.CodeTheme); err == nil {
+	if lexer := render.PickLexer(opts.Lang, opts.SourceName, src); lexer != nil {
+		if html, err := render.HighlightCode(string(src), lexer, opts.CodeTheme); err == nil {
 			return html
 		}
 	}
 	return rawPre(src)
 }
 
-func codeView(src []byte, opts Options, analysis report.Analysis) string {
+func codeView(src []byte, opts render.Options, analysis report.Analysis) string {
 	return codeOverview(src, opts, analysis) + codeBlock(src, opts)
 }
 
-func codeOverview(src []byte, opts Options, analysis report.Analysis) string {
+func codeOverview(src []byte, opts render.Options, analysis report.Analysis) string {
 	items := make([][2]string, 0, 3)
 	if lang, ok := analysis.Data.(string); ok && strings.TrimSpace(lang) != "" {
 		items = append(items, [2]string{"Language", lang})
-	} else if lexer := pickLexer(opts.Lang, opts.SourceName, src); lexer != nil {
+	} else if lexer := render.PickLexer(opts.Lang, opts.SourceName, src); lexer != nil {
 		items = append(items, [2]string{"Language", lexer.Config().Name})
 	} else {
 		items = append(items, [2]string{"Language", "Plain text"})
@@ -47,11 +48,11 @@ func codeOverview(src []byte, opts Options, analysis report.Analysis) string {
 	return overviewList("code-overview", "Code overview", items)
 }
 
-func codeRenderer(src []byte, opts Options) string {
-	if reANSI.Match(src) {
+func codeRenderer(src []byte, opts render.Options) string {
+	if render.ReANSI.Match(src) {
 		return "ANSI"
 	}
-	if pickLexer(opts.Lang, opts.SourceName, src) != nil {
+	if render.PickLexer(opts.Lang, opts.SourceName, src) != nil {
 		return "Chroma"
 	}
 	return "Plain text"

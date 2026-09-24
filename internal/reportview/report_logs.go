@@ -1,7 +1,8 @@
-package render
+package reportview
 
 import (
 	"fmt"
+	render "github.com/dotcommander/html/internal/render"
 	htmlpkg "html"
 	"regexp"
 	"strconv"
@@ -9,7 +10,7 @@ import (
 )
 
 func logView(src []byte) string {
-	lines := strings.Split(string(reANSI.ReplaceAll(src, nil)), "\n")
+	lines := strings.Split(string(render.ReANSI.ReplaceAll(src, nil)), "\n")
 	if len(lines) > 0 && lines[len(lines)-1] == "" {
 		lines = lines[:len(lines)-1]
 	}
@@ -165,7 +166,7 @@ func transcriptOverview(turns, speakers int) string {
 }
 
 func transcriptTurns(src []byte) []transcriptTurn {
-	lines := strings.Split(string(reANSI.ReplaceAll(src, nil)), "\n")
+	lines := strings.Split(string(render.ReANSI.ReplaceAll(src, nil)), "\n")
 	turns := make([]transcriptTurn, 0, len(lines))
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -198,9 +199,5 @@ func transcriptLine(line string) (speaker, text string, ok bool) {
 }
 
 func escapeTableText(text string) string {
-	return htmlpkg.EscapeString(cleanTableText(text))
-}
-
-func cleanTableText(text string) string {
-	return string(reANSI.ReplaceAll([]byte(text), nil))
+	return htmlpkg.EscapeString(render.CleanTableText(text))
 }

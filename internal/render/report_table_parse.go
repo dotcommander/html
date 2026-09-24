@@ -10,8 +10,12 @@ import (
 	"github.com/dotcommander/html/internal/report"
 )
 
-func tableRows(src []byte, analysis report.Analysis) ([]string, [][]string) {
-	src = stripUTF8BOM(src)
+// utf8BOM is stripped from table sources before parsing so the first
+// header line is not treated as BOM-prefixed text.
+var utf8BOM = []byte{0xef, 0xbb, 0xbf}
+
+func TableRows(src []byte, analysis report.Analysis) ([]string, [][]string) {
+	src = StripUTF8BOM(src)
 	switch analysis.Kind {
 	case report.KindJSONRecords:
 		if records, ok := analysis.Data.([]any); ok {
@@ -36,7 +40,7 @@ func tableRows(src []byte, analysis report.Analysis) ([]string, [][]string) {
 		if analysis.Kind == report.KindTSVRecords {
 			comma = '\t'
 		}
-		text := trimOuterBlankLines(string(stripUTF8BOM(src)))
+		text := trimOuterBlankLines(string(StripUTF8BOM(src)))
 		if strings.HasPrefix(strings.TrimLeft(text, " \t\r\n"), string(utf8BOM)) {
 			return nil, nil
 		}
@@ -64,7 +68,7 @@ func jsonRecordRows(records []any) ([]string, [][]string) {
 			seen[k] = true
 		}
 	}
-	headers := sortedStringKeys(seen)
+	headers := SortedStringKeys(seen)
 	if len(headers) == 0 {
 		return nil, nil
 	}
@@ -115,7 +119,7 @@ func trimOuterBlankLines(text string) string {
 	return strings.Join(lines[start:end], "")
 }
 
-func headerLabels(headers []string) []string {
+func HeaderLabels(headers []string) []string {
 	labels := make([]string, len(headers))
 	counts := map[string]int{}
 	used := map[string]bool{}
@@ -137,14 +141,14 @@ func headerLabels(headers []string) []string {
 }
 
 func headerLabel(header string, index int) string {
-	header = cleanTableText(header)
+	header = CleanTableText(header)
 	if strings.TrimSpace(header) == "" {
 		return fmt.Sprintf("Column %d", index+1)
 	}
 	return header
 }
 
-func stripUTF8BOM(src []byte) []byte {
+func StripUTF8BOM(src []byte) []byte {
 	return bytes.TrimPrefix(src, utf8BOM)
 }
 
@@ -163,4 +167,25 @@ func stringify(v any) string {
 		}
 		return string(b)
 	}
+}
+
+// CleanTableText strips ANSI escape sequences from cell text so table
+// extraction sees the visible characters only.
+func CleanTableText(text string) string {
+	return string(ReANSI.ReplaceAll([]byte(text), nil))
+}
+
+// SortedStringKeys returns m's keys in sorted order for deterministic
+// column and header ordering.
+func SortedStringKeys(m map[string]bool) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	for i := 1; i < len(keys); i++ {
+		for j := i; j > 0 && keys[j] < keys[j-1]; j-- {
+			keys[j], keys[j-1] = keys[j-1], keys[j]
+		}
+	}
+	return keys
 }
