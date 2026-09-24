@@ -703,21 +703,11 @@ func main() {
 		})()`, &m.DetectionKindCounts),
 		chromedp.Evaluate(`document.querySelectorAll("[data-error-contract]").length`, &m.ErrorContracts),
 		chromedp.Evaluate(`(() => {
-			const docs = [document];
-			for (const frame of document.querySelectorAll("iframe")) {
-				try {
-					if (frame.contentDocument) docs.push(frame.contentDocument);
-				} catch (_) {}
-			}
+			`+iframeDocsJS+`;
 			return docs.reduce((sum, doc) => sum + doc.querySelectorAll(".copy-btn").length, 0);
 		})()`, &m.CopyButtons),
 		chromedp.Evaluate(`(() => {
-			const docs = [document];
-			for (const frame of document.querySelectorAll("iframe")) {
-				try {
-					if (frame.contentDocument) docs.push(frame.contentDocument);
-				} catch (_) {}
-			}
+			`+iframeDocsJS+`;
 			return docs.reduce((sum, doc) => sum + doc.querySelectorAll(".heading-anchor").length, 0);
 		})()`, &m.HeadingAnchors),
 		chromedp.Evaluate(`(() => {
@@ -906,81 +896,41 @@ func main() {
 			return docs.some((doc) => (doc.body?.innerText || "").includes("alert(1)"));
 		})()`, &m.AlertTextPresent),
 		chromedp.Evaluate(`(() => {
-			const docs = [document];
-			for (const frame of document.querySelectorAll("iframe")) {
-				try {
-					if (frame.contentDocument) docs.push(frame.contentDocument);
-				} catch (_) {}
-			}
+			`+iframeDocsJS+`;
 			return docs.reduce((sum, doc) => sum + doc.querySelectorAll("img").length, 0);
 		})()`, &m.ImageCount),
 		chromedp.Evaluate(`(() => {
-			const docs = [document];
-			for (const frame of document.querySelectorAll("iframe")) {
-				try {
-					if (frame.contentDocument) docs.push(frame.contentDocument);
-				} catch (_) {}
-			}
+			`+iframeDocsJS+`;
 			return docs.reduce((sum, doc) => sum + Array.from(doc.querySelectorAll("img")).filter((img) => img.complete && img.naturalWidth > 0 && img.naturalHeight > 0).length, 0);
 		})()`, &m.LoadedImages),
 		chromedp.Evaluate(`(() => {
-			const docs = [document];
-			for (const frame of document.querySelectorAll("iframe")) {
-				try {
-					if (frame.contentDocument) docs.push(frame.contentDocument);
-				} catch (_) {}
-			}
+			`+iframeDocsJS+`;
 			return docs.reduce((sum, doc) => sum + Array.from(doc.querySelectorAll("img")).filter((img) => img.currentSrc.startsWith("data:image/") || img.getAttribute("src")?.startsWith("data:image/")).length, 0);
 		})()`, &m.DataURIImages),
 		chromedp.Evaluate(`(() => {
-			const docs = [document];
-			for (const frame of document.querySelectorAll("iframe")) {
-				try {
-					if (frame.contentDocument) docs.push(frame.contentDocument);
-				} catch (_) {}
-			}
+			`+iframeDocsJS+`;
 			return docs.reduce((sum, doc) => sum + Array.from(doc.querySelectorAll("img")).filter((img) => {
 				const src = img.currentSrc || img.getAttribute("src") || "";
 				return src.endsWith(".svg") || src.startsWith("data:image/svg+xml");
 			}).length, 0);
 		})()`, &m.SVGImages),
 		chromedp.Evaluate(`(() => {
-			const docs = [document];
-			for (const frame of document.querySelectorAll("iframe")) {
-				try {
-					if (frame.contentDocument) docs.push(frame.contentDocument);
-				} catch (_) {}
-			}
+			`+iframeDocsJS+`;
 			return docs.reduce((sum, doc) => sum + Array.from(doc.querySelectorAll("img")).filter((img) => {
 				const src = img.currentSrc || img.getAttribute("src") || "";
 				return src.endsWith(".png") || src.startsWith("data:image/png");
 			}).length, 0);
 		})()`, &m.RasterImages),
 		chromedp.Evaluate(`(() => {
-			const docs = [document];
-			for (const frame of document.querySelectorAll("iframe")) {
-				try {
-					if (frame.contentDocument) docs.push(frame.contentDocument);
-				} catch (_) {}
-			}
+			`+iframeDocsJS+`;
 			return docs.reduce((sum, doc) => sum + doc.querySelectorAll("[data-media-preview] img").length, 0);
 		})()`, &m.MediaPreviewImages),
 		chromedp.Evaluate(`(() => {
-			const docs = [document];
-			for (const frame of document.querySelectorAll("iframe")) {
-				try {
-					if (frame.contentDocument) docs.push(frame.contentDocument);
-				} catch (_) {}
-			}
+			`+iframeDocsJS+`;
 			return docs.reduce((sum, doc) => sum + doc.querySelectorAll('[data-media-preview="source"] img').length, 0);
 		})()`, &m.MediaPreviewSource),
 		chromedp.Evaluate(`(() => {
-			const docs = [document];
-			for (const frame of document.querySelectorAll("iframe")) {
-				try {
-					if (frame.contentDocument) docs.push(frame.contentDocument);
-				} catch (_) {}
-			}
+			`+iframeDocsJS+`;
 			return docs.reduce((sum, doc) => sum + doc.querySelectorAll('[data-media-preview="rendered"] img').length, 0);
 		})()`, &m.MediaPreviewRendered),
 		chromedp.Evaluate(`document.documentElement.clientWidth`, &m.ClientWidth),
@@ -1014,6 +964,17 @@ func main() {
 		os.Exit(1)
 	}
 }
+
+// iframeDocsJS collects the top document plus every iframe document that is
+// reachable in-process, so image metrics count content rendered inside
+// gallery/dashboard iframes as well as the main page. The try/catch keeps
+// cross-origin frames from aborting the scan.
+const iframeDocsJS = `const docs = [document];
+for (const frame of document.querySelectorAll("iframe")) {
+	try {
+		if (frame.contentDocument) docs.push(frame.contentDocument);
+	} catch (_) {}
+}`
 
 const designContractScript = `(() => {
 	const visible = (element) => {
