@@ -84,11 +84,15 @@ func printUsage(w io.Writer, fs *flag.FlagSet) {
 	fmt.Fprintln(w, "Render Markdown or piped text to a clean HTML page and open it in the browser")
 	fmt.Fprintln(w, "\nUsage:\n  html [flags] [file]\n\nFlags:")
 	fs.VisitAll(func(f *flag.Flag) {
-		switch f.Name {
-		}
 		prefix := "--"
 		if len(f.Name) == 1 {
 			prefix = "-"
+		}
+		if f.DefValue == "" {
+			// Stdlib PrintDefaults omits zero-value defaults; an empty default
+			// would otherwise render a dangling "(default )" suffix.
+			fmt.Fprintf(w, "  %s%s\n    \t%s\n", prefix, f.Name, f.Usage)
+			return
 		}
 		fmt.Fprintf(w, "  %s%s\n    \t%s (default %s)\n", prefix, f.Name, f.Usage, f.DefValue)
 	})
