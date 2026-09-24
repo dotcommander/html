@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Fixes
 
 - Reap detached launcher processes on open.
+- Contain local-image inlining to the render source directory; outside traversal and symlinks resolve as external links.
 
 ## v0.2.1 - 2026-07-16
 

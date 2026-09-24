@@ -56,8 +56,10 @@ Plain text and stdin have no local-image base directory.
 | `-m`, `--markdown` | force Markdown (override stdin auto-detection) |
 | `-t`, `--title <text>` | page title for piped input (default `stdin`) |
 | `-l`, `--lang <lang>` | syntax-highlight language for plain mode (`go`, `json`; `text` = none) |
+| `--code-theme <name>` | chroma style for code blocks (`dracula`, `monokai`, `nord`; empty = github/github-dark) |
 | `--frame` | wrap plain/ANSI output in a terminal-window frame, implies `--plain` (share-ready "screenshot") |
 | `--safe` | disable raw-HTML passthrough — use for untrusted Markdown |
+| `--stdout` | write the final HTML document to stdout without opening |
 | `--template <selector>` | page presentation: `default`, `reader`, `notebook`, or a local Go HTML template file |
 | `--version` | print the release version (`html devel` for local builds) |
 
@@ -65,7 +67,7 @@ Run `html --help` for the full list, including the report-mode flags (`--mode`, 
 
 ## Markdown vs. plain text
 
-Piped input is auto-classified. A high-confidence structural signal — a fenced code block, a GFM table, or a setext heading — makes it Markdown; otherwise it stays plain text, so scripts, diffs, JSON, YAML, and logs are rendered faithfully rather than mangled. Normal document rendering refuses binary input (a NUL byte, or >10% non-text bytes); report mode can render a safe hex/ascii binary preview. Force the document mode with `-m` / `-p`.
+Piped input is auto-classified. A high-confidence structural signal — a fenced code block, a GFM table, a GFM task list, a multi-line blockquote, a setext heading, or an ATX heading followed by a blank line — makes it Markdown; otherwise it stays plain text, so scripts, diffs, JSON, YAML, and logs are rendered faithfully rather than mangled. Normal document rendering refuses binary input (a NUL byte, or >10% non-text bytes); report mode can render a safe hex/ascii binary preview. Force the document mode with `-m` / `-p`.
 
 Files are decided by extension: `.md` / `.markdown` → Markdown, everything else → plain.
 
