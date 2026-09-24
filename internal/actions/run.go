@@ -26,6 +26,9 @@ var errBinaryInput = errors.New("input looks binary (NUL or non-text bytes); ref
 // Options controls a single render-and-open invocation. Exactly one input source
 // is used: Stdin when non-nil (piped data), otherwise File (a path on disk).
 type Options struct {
+	// Context bounds the optional LLM report planner (the non-report render
+	// path never uses it). Optional: the CLI always injects one; API callers
+	// that omit it get a bare context.TODO() default in runReport.
 	Context   context.Context
 	File      string    // path to the source file (empty when reading Stdin)
 	Stdin     io.Reader // piped source; non-nil selects stdin mode (injectable for tests)
@@ -132,6 +135,8 @@ func runReport(opts Options) (Result, error) {
 	}
 	ctx := opts.Context
 	if ctx == nil {
+		// Options.Context is optional — the CLI always injects one; this
+		// default only fires for API callers that omit it (see Options).
 		ctx = context.TODO()
 	}
 	reportOpts := report.Options{
