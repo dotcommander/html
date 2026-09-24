@@ -178,6 +178,9 @@ type Options struct {
 	SourceName    string
 }
 
+// DefaultOptions is the single home for report option default values. Any
+// field defaulted here must also be merged in withDefaults (plan.go), which
+// declares the full rule.
 func DefaultOptions() Options {
 	return Options{
 		Mode:       ModeOverrideAuto,

@@ -32,24 +32,62 @@ type chatResponse struct {
 	} `json:"choices"`
 }
 
+// planWithLLM resolves the report plan through the optional LLM planner:
+// a validated cached plan when present, otherwise one endpoint call followed by
+// validation and a best-effort cache write. The returned string is a
+// human-readable reason to append to the fallback plan; empty means success.
 func planWithLLM(ctx context.Context, src []byte, analysis Analysis, fallback ReportPlan, opts Options) (ReportPlan, string) {
 	timeout, err := time.ParseDuration(opts.LLMTimeout)
 	if err != nil {
 		return ReportPlan{}, "llm planner invalid timeout: " + err.Error()
 	}
 	key, summary := llmCacheKey(src, analysis, opts)
-	securePlanCachePath(key)
-	if b, err := os.ReadFile(key); err == nil {
-		var p ReportPlan
-		if err := json.Unmarshal(b, &p); err == nil {
-			p.Planner.Cache = "hit"
-			if valid, err := ValidatePlan(p); err == nil {
-				if err := validatePlanForAnalysis(valid, analysis); err == nil {
-					return valid, ""
-				}
-			}
-		}
+	if p, ok := llmPlanFromCache(key, analysis); ok {
+		return p, ""
 	}
+	p, reason := llmPlanFromEndpoint(ctx, timeout, llmUserPrompt(analysis, fallback, summary, src), opts)
+	if reason != "" {
+		return ReportPlan{}, reason
+	}
+	valid, err := ValidatePlan(p)
+	if err != nil {
+		return ReportPlan{}, "llm planner rejected: " + err.Error()
+	}
+	if err := validatePlanForAnalysis(valid, analysis); err != nil {
+		return ReportPlan{}, "llm planner rejected: " + err.Error()
+	}
+	storeLLMPlan(key, valid)
+	return valid, ""
+}
+
+// llmPlanFromCache returns the cached plan for key when it parses and passes
+// both plan validations. Any failure is a miss: the caller falls through to
+// the endpoint instead of trusting a stale or foreign cached plan.
+func llmPlanFromCache(key string, analysis Analysis) (ReportPlan, bool) {
+	securePlanCachePath(key)
+	b, err := os.ReadFile(key)
+	if err != nil {
+		return ReportPlan{}, false
+	}
+	var p ReportPlan
+	if json.Unmarshal(b, &p) != nil {
+		return ReportPlan{}, false
+	}
+	p.Planner.Cache = "hit"
+	valid, err := ValidatePlan(p)
+	if err != nil {
+		return ReportPlan{}, false
+	}
+	if validatePlanForAnalysis(valid, analysis) != nil {
+		return ReportPlan{}, false
+	}
+	return valid, true
+}
+
+// llmPlanFromEndpoint performs one chat-completions call and decodes its first
+// choice into an unvalidated ReportPlan stamped as a cache miss. The timeout
+// bounds only this call; cached hits never spend it.
+func llmPlanFromEndpoint(ctx context.Context, timeout time.Duration, prompt string, opts Options) (ReportPlan, string) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
@@ -57,7 +95,7 @@ func planWithLLM(ctx context.Context, src []byte, analysis Analysis, fallback Re
 		Model: opts.LLMModel,
 		Messages: []chatMessage{
 			{Role: "system", Content: llmSystemPrompt()},
-			{Role: "user", Content: llmUserPrompt(analysis, fallback, summary, src)},
+			{Role: "user", Content: prompt},
 		},
 		Temperature: 0,
 	}
@@ -91,28 +129,33 @@ func planWithLLM(ctx context.Context, src []byte, analysis Analysis, fallback Re
 		return ReportPlan{}, "llm planner invalid json: " + err.Error()
 	}
 	p.Planner = PlannerInfo{Name: "llm", Model: opts.LLMModel, Prompt: PlannerPromptVersion, Cache: "miss", Contributed: true}
-	valid, err := ValidatePlan(p)
-	if err != nil {
-		return ReportPlan{}, "llm planner rejected: " + err.Error()
-	}
-	if err := validatePlanForAnalysis(valid, analysis); err != nil {
-		return ReportPlan{}, "llm planner rejected: " + err.Error()
-	}
-	cacheDir := filepath.Dir(key)
-	_ = os.MkdirAll(cacheDir, 0o700)
-	_ = os.Chmod(cacheDir, 0o700)
-	if b, err := json.MarshalIndent(valid, "", "  "); err == nil {
-		_ = atomicfile.Write(key, b, 0o600)
-	}
-	return valid, ""
+	return p, ""
 }
 
-func securePlanCachePath(path string) {
+// storeLLMPlan persists a validated plan for future cache hits. Best-effort:
+// a failed write only costs a future planner call, never the current render.
+func storeLLMPlan(key string, p ReportPlan) {
+	preparePlanCacheDir(key)
+	if b, err := json.MarshalIndent(p, "", "  "); err == nil {
+		_ = atomicfile.Write(key, b, 0o600)
+	}
+}
+
+// preparePlanCacheDir creates and tightens the plan-cache directory holding
+// path. Best-effort: failures fall back to an untightened directory rather
+// than failing the planner.
+func preparePlanCacheDir(path string) {
 	dir := filepath.Dir(path)
 	if os.MkdirAll(dir, 0o700) != nil {
 		return
 	}
 	_ = os.Chmod(dir, 0o700)
+}
+
+// securePlanCachePath upgrades plan-cache artifacts created by older releases
+// before they are reused: tighten the directory, then the cached file itself.
+func securePlanCachePath(path string) {
+	preparePlanCacheDir(path)
 	if err := os.Chmod(path, 0o600); err != nil && !os.IsNotExist(err) {
 		return
 	}

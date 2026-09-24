@@ -36,6 +36,9 @@ func Plan(ctx context.Context, src []byte, opts Options) (Analysis, ReportPlan) 
 	return analysis, llmPlan
 }
 
+// withDefaults fills unset Options fields from DefaultOptions. Default
+// values live only in DefaultOptions; every field that should default MUST
+// also be listed here — a missing entry silently keeps the zero value.
 func withDefaults(opts Options) Options {
 	def := DefaultOptions()
 	if opts.Mode == "" {
