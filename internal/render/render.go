@@ -7,6 +7,7 @@ import (
 
 	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
 	"github.com/alecthomas/chroma/v2/styles"
+	"github.com/dotcommander/html/internal/report"
 	"github.com/yuin/goldmark"
 	highlighting "github.com/yuin/goldmark-highlighting/v2"
 	"github.com/yuin/goldmark/extension"
@@ -75,6 +76,26 @@ var (
 	mdSafe   = newMarkdown(false, "")
 )
 
+// markdownPipeline is the single home for goldmark pipeline selection under
+// opts. Order: semantic-list wiring first (only the render path passes refs:
+// the transformer rewrites list markup but never touches image destinations,
+// so the diagnostics path passes nil without changing classification), then a
+// custom code theme (fresh pipeline), then the immutable safe/unsafe
+// singletons. Any new pipeline-affecting option must be added here — once —
+// so render and diagnostics selection cannot drift apart.
+func markdownPipeline(opts Options, refs []report.SourceRef) goldmark.Markdown {
+	switch {
+	case len(refs) > 0:
+		return newMarkdownWithImageLimit(!opts.Safe, opts.CodeTheme, maxInlineImages, semanticListTransformer{refs: refs})
+	case opts.CodeTheme != "":
+		return newMarkdown(!opts.Safe, opts.CodeTheme)
+	case opts.Safe:
+		return mdSafe
+	default:
+		return mdUnsafe
+	}
+}
+
 // ValidCodeTheme reports whether name is a Chroma style that can be used for
 // code highlighting. Empty means "use the built-in github/github-dark default".
 func ValidCodeTheme(name string) bool {
@@ -113,15 +134,7 @@ func RenderWithDiagnostics(src []byte, opts Options) (string, []ImageDiagnostic,
 }
 
 func renderMarkdownFragment(src []byte, opts Options) (documentFragment, []ImageDiagnostic, error) {
-	md := mdUnsafe
-	switch {
-	case len(opts.semanticLists) > 0:
-		md = newMarkdownWithImageLimit(!opts.Safe, opts.CodeTheme, maxInlineImages, semanticListTransformer{refs: opts.semanticLists})
-	case opts.CodeTheme != "":
-		md = newMarkdown(!opts.Safe, opts.CodeTheme)
-	case opts.Safe:
-		md = mdSafe
-	}
+	md := markdownPipeline(opts, opts.semanticLists)
 	pc := parser.NewContext()
 	pc.Set(baseDirKey, opts.SourceDir)
 	if opts.RebaseLocalLinks {
@@ -155,10 +168,9 @@ func ImageDiagnostics(src []byte, opts Options) []ImageDiagnostic {
 	if opts.Plain || opts.Safe {
 		return nil
 	}
-	md := mdUnsafe
-	if opts.CodeTheme != "" {
-		md = newMarkdown(true, opts.CodeTheme)
-	}
+	// No semantic refs: the transformer never alters image classification
+	// (declared in markdownPipeline).
+	md := markdownPipeline(opts, nil)
 	pc := parser.NewContext()
 	pc.Set(baseDirKey, opts.SourceDir)
 	md.Parser().Parse(text.NewReader(src), parser.WithContext(pc))

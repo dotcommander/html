@@ -79,17 +79,7 @@ func logOverview(counts logSeverityCounts) string {
 			items = append(items, [2]string{item.label, strconv.Itoa(item.count)})
 		}
 	}
-	var b strings.Builder
-	b.WriteString(`<dl class="log-overview" aria-label="Log overview">`)
-	for _, item := range items {
-		b.WriteString(`<div><dt>`)
-		b.WriteString(htmlpkg.EscapeString(item[0]))
-		b.WriteString(`</dt><dd>`)
-		b.WriteString(htmlpkg.EscapeString(item[1]))
-		b.WriteString(`</dd></div>`)
-	}
-	b.WriteString(`</dl>`)
-	return b.String()
+	return overviewList("log-overview", "Log overview", items)
 }
 
 func logSeverity(line string) string {
@@ -171,17 +161,7 @@ func transcriptOverview(turns, speakers int) string {
 		{"Turns", strconv.Itoa(turns)},
 		{"Speakers", strconv.Itoa(speakers)},
 	}
-	var b strings.Builder
-	b.WriteString(`<dl class="transcript-overview" aria-label="Transcript overview">`)
-	for _, item := range items {
-		b.WriteString(`<div><dt>`)
-		b.WriteString(htmlpkg.EscapeString(item[0]))
-		b.WriteString(`</dt><dd>`)
-		b.WriteString(htmlpkg.EscapeString(item[1]))
-		b.WriteString(`</dd></div>`)
-	}
-	b.WriteString(`</dl>`)
-	return b.String()
+	return overviewList("transcript-overview", "Transcript overview", items)
 }
 
 func transcriptTurns(src []byte) []transcriptTurn {

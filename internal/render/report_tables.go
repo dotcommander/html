@@ -71,6 +71,20 @@ func emptyTableText(emptyInput bool) string {
 	return "No rows match"
 }
 
+// recordCardFromRow builds one card titled per recordCardTitle, carrying
+// only the row's visible (non-blank) fields and counting them in stats.
+func recordCardFromRow(n int, labels, row []string, stats *recordCardStats) recordCard {
+	card := recordCard{Title: recordCardTitle(n, labels, row)}
+	for j, label := range labels {
+		if j >= len(row) || strings.TrimSpace(cleanTableText(row[j])) == "" {
+			continue
+		}
+		card.Fields = append(card.Fields, recordCardField{Label: label, Value: row[j]})
+		stats.VisibleFields++
+	}
+	return card
+}
+
 func recordCards(src []byte, analysis report.Analysis) string {
 	headers, rows := tableRows(src, analysis)
 	if len(headers) == 0 {
@@ -83,15 +97,7 @@ func recordCards(src []byte, analysis report.Analysis) string {
 	cards := make([]recordCard, 0, len(rows))
 	stats := recordCardStats{Cards: len(rows)}
 	for i, row := range rows {
-		card := recordCard{Title: recordCardTitle(i+1, labels, row)}
-		for j, label := range labels {
-			if j >= len(row) || strings.TrimSpace(cleanTableText(row[j])) == "" {
-				continue
-			}
-			card.Fields = append(card.Fields, recordCardField{Label: label, Value: row[j]})
-			stats.VisibleFields++
-		}
-		cards = append(cards, card)
+		cards = append(cards, recordCardFromRow(i+1, labels, row, &stats))
 	}
 	var b strings.Builder
 	b.WriteString(recordCardsOverview(stats))
@@ -127,20 +133,10 @@ type recordCardStats struct {
 }
 
 func recordCardsOverview(stats recordCardStats) string {
-	var b strings.Builder
-	b.WriteString(`<dl class="record-cards-overview" aria-label="Record cards overview">`)
-	for _, item := range [][2]string{
+	return overviewList("record-cards-overview", "Record cards overview", [][2]string{
 		{"Cards", strconv.Itoa(stats.Cards)},
 		{"Visible fields", strconv.Itoa(stats.VisibleFields)},
-	} {
-		b.WriteString(`<div><dt>`)
-		b.WriteString(htmlpkg.EscapeString(item[0]))
-		b.WriteString(`</dt><dd>`)
-		b.WriteString(htmlpkg.EscapeString(item[1]))
-		b.WriteString(`</dd></div>`)
-	}
-	b.WriteString(`</dl>`)
-	return b.String()
+	})
 }
 
 func recordCardTitle(n int, labels, row []string) string {
@@ -215,14 +211,7 @@ func reviewCards(src []byte, analysis report.Analysis) string {
 	occurrences := make(map[string]int)
 	stats := recordCardStats{Cards: len(rows)}
 	for i, row := range rows {
-		card := recordCard{Title: recordCardTitle(i+1, labels, row)}
-		for j, label := range labels {
-			if j >= len(row) || strings.TrimSpace(cleanTableText(row[j])) == "" {
-				continue
-			}
-			card.Fields = append(card.Fields, recordCardField{Label: label, Value: row[j]})
-			stats.VisibleFields++
-		}
+		card := recordCardFromRow(i+1, labels, row, &stats)
 		rowDigest := canonicalRowDigest(labels, row)
 		occurrences[rowDigest]++
 		items = append(items, reviewItem{

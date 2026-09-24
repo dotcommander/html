@@ -41,17 +41,7 @@ func textOverview(src []byte) string {
 		{"Words", strconv.Itoa(words)},
 		{"Characters", strconv.Itoa(chars)},
 	}
-	var b strings.Builder
-	b.WriteString(`<dl class="text-overview" aria-label="Text overview">`)
-	for _, item := range items {
-		b.WriteString(`<div><dt>`)
-		b.WriteString(htmlpkg.EscapeString(item[0]))
-		b.WriteString(`</dt><dd>`)
-		b.WriteString(htmlpkg.EscapeString(item[1]))
-		b.WriteString(`</dd></div>`)
-	}
-	b.WriteString(`</dl>`)
-	return b.String()
+	return overviewList("text-overview", "Text overview", items)
 }
 
 func binaryView(src []byte, analysis report.Analysis) string {
@@ -89,17 +79,7 @@ func binaryOverview(src []byte, analysis report.Analysis) string {
 	if len(analysis.Reasons) > 0 {
 		items = append(items, [2]string{"Reason", strings.Join(analysis.Reasons, ", ")})
 	}
-	var b strings.Builder
-	b.WriteString(`<dl class="binary-overview" aria-label="Binary overview">`)
-	for _, item := range items {
-		b.WriteString(`<div><dt>`)
-		b.WriteString(htmlpkg.EscapeString(item[0]))
-		b.WriteString(`</dt><dd>`)
-		b.WriteString(htmlpkg.EscapeString(item[1]))
-		b.WriteString(`</dd></div>`)
-	}
-	b.WriteString(`</dl>`)
-	return b.String()
+	return overviewList("binary-overview", "Binary overview", items)
 }
 
 func hexBytes(src []byte) string {
@@ -154,17 +134,11 @@ func jsonOverview(data any) string {
 		if len(keys) == 0 {
 			return `<div class="json-overview" aria-label="JSON overview"><span>empty object</span></div>`
 		}
-		var b strings.Builder
-		b.WriteString(`<dl class="json-overview" aria-label="JSON overview">`)
+		items := make([][2]string, 0, len(keys))
 		for _, key := range keys {
-			b.WriteString(`<div><dt>`)
-			b.WriteString(htmlpkg.EscapeString(key))
-			b.WriteString(`</dt><dd>`)
-			b.WriteString(htmlpkg.EscapeString(jsonValueLabel(v[key])))
-			b.WriteString(`</dd></div>`)
+			items = append(items, [2]string{key, jsonValueLabel(v[key])})
 		}
-		b.WriteString(`</dl>`)
-		return b.String()
+		return overviewList("json-overview", "JSON overview", items)
 	case []any:
 		return fmt.Sprintf(`<div class="json-overview" aria-label="JSON overview"><span><strong>%d</strong> %s</span><span>%s</span></div>`, len(v), plural(len(v), "item", "items"), htmlpkg.EscapeString(jsonValueLabel(v)))
 	default:

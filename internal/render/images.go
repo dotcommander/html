@@ -128,15 +128,16 @@ func (s *imageInlinerState) addDiagnostic(dest string, code ImageDiagnosticCode)
 	s.diagnostics = append(s.diagnostics, ImageDiagnostic{Code: code, Destination: dest})
 }
 
+// load resolves one image reference through the shared classifier, memoizing
+// filesystem reads per path. It returns ok=false (leaving the original ref)
+// for remote/data refs, unknown types, missing/oversize files, or any read
+// error — image inlining never fails a render. A successful classification
+// implies a non-empty baseDir: the empty-baseDir (stdin) case is rejected
+// inside classifyInlineImagePath as a silent miss.
 func (s *imageInlinerState) load(baseDir, dest string) inlineImageResult {
 	path, mime, diagnostic, ok := classifyInlineImagePath(baseDir, dest)
 	if !ok {
 		return inlineImageResult{diagnostic: diagnostic}
-	}
-	// With no source directory, local paths intentionally remain untouched: the
-	// caller has not established which directory owns relative image resolution.
-	if baseDir == "" {
-		return inlineImageResult{}
 	}
 	if result, ok := s.memo[path]; ok {
 		return result
@@ -144,23 +145,6 @@ func (s *imageInlinerState) load(baseDir, dest string) inlineImageResult {
 	result := readInlineImage(path, mime)
 	s.memo[path] = result
 	return result
-}
-
-// inlineImage resolves a local image reference to a data: URI. It returns ok=false
-// (leaving the original ref) for remote/data refs, unknown types, missing/oversize
-// files, or any read error — image inlining never fails a render.
-func inlineImage(baseDir, dest string) (string, bool) {
-	path, mime, ok := inlineImagePath(baseDir, dest)
-	if !ok {
-		return "", false
-	}
-	result := readInlineImage(path, mime)
-	return result.uri, result.ok
-}
-
-func inlineImagePath(baseDir, dest string) (string, string, bool) {
-	path, mime, _, ok := classifyInlineImagePath(baseDir, dest)
-	return path, mime, ok
 }
 
 func classifyInlineImagePath(baseDir, dest string) (string, string, ImageDiagnosticCode, bool) {

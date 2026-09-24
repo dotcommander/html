@@ -2,7 +2,6 @@ package render
 
 import (
 	"bytes"
-	htmlpkg "html"
 	"strconv"
 	"strings"
 )
@@ -56,17 +55,7 @@ func articleOverview(src []byte, articleHTML string) string {
 	if quotes := len(articleBlockquoteRe.FindAllStringIndex(articleHTML, -1)); quotes > 0 {
 		items = append(items, [2]string{"Quotes", strconv.Itoa(quotes)})
 	}
-	var b strings.Builder
-	b.WriteString(`<dl class="article-overview" aria-label="Article overview">`)
-	for _, item := range items {
-		b.WriteString(`<div><dt>`)
-		b.WriteString(htmlpkg.EscapeString(item[0]))
-		b.WriteString(`</dt><dd>`)
-		b.WriteString(htmlpkg.EscapeString(item[1]))
-		b.WriteString(`</dd></div>`)
-	}
-	b.WriteString(`</dl>`)
-	return b.String()
+	return overviewList("article-overview", "Article overview", items)
 }
 
 func lineCount(src []byte) int {

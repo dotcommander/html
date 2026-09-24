@@ -48,20 +48,10 @@ func (s *treeStats) add(depth int) {
 }
 
 func fileTreeOverview(stats treeStats) string {
-	var b strings.Builder
-	b.WriteString(`<dl class="file-tree-overview" aria-label="File tree overview">`)
-	for _, item := range [][2]string{
+	return overviewList("file-tree-overview", "File tree overview", [][2]string{
 		{"Entries", strconv.Itoa(stats.Entries)},
 		{"Max depth", strconv.Itoa(stats.MaxDepth)},
-	} {
-		b.WriteString(`<div><dt>`)
-		b.WriteString(htmlpkg.EscapeString(item[0]))
-		b.WriteString(`</dt><dd>`)
-		b.WriteString(htmlpkg.EscapeString(item[1]))
-		b.WriteString(`</dd></div>`)
-	}
-	b.WriteString(`</dl>`)
-	return b.String()
+	})
 }
 
 func nonEmptyTreeLines(text string) []string {

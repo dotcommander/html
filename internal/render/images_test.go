@@ -214,9 +214,9 @@ func TestInlineImage_AggregateBudgetCountsRepeatedReferences(t *testing.T) {
 
 	tmp := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(tmp, "repeat.png"), []byte("xx"), 0o644))
-	uri, ok := inlineImage(tmp, "repeat.png")
-	require.True(t, ok)
-	md := newMarkdownWithImageLimit(true, "", int64(len(uri)*2))
+	result := readInlineImage(filepath.Join(tmp, "repeat.png"), "image/png")
+	require.True(t, result.ok)
+	md := newMarkdownWithImageLimit(true, "", int64(len(result.uri)*2))
 	pc := parser.NewContext()
 	pc.Set(baseDirKey, tmp)
 	src := []byte("![one](repeat.png)\n![two](repeat.png)\n![three](repeat.png)\n")

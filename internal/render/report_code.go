@@ -44,17 +44,7 @@ func codeOverview(src []byte, opts Options, analysis report.Analysis) string {
 	if len(items) == 0 {
 		return ""
 	}
-	var b strings.Builder
-	b.WriteString(`<dl class="code-overview" aria-label="Code overview">`)
-	for _, item := range items {
-		b.WriteString(`<div><dt>`)
-		b.WriteString(htmlpkg.EscapeString(item[0]))
-		b.WriteString(`</dt><dd>`)
-		b.WriteString(htmlpkg.EscapeString(item[1]))
-		b.WriteString(`</dd></div>`)
-	}
-	b.WriteString(`</dl>`)
-	return b.String()
+	return overviewList("code-overview", "Code overview", items)
 }
 
 func codeRenderer(src []byte, opts Options) string {

@@ -49,6 +49,9 @@ func reportTitle(src []byte, opts Options, analysis report.Analysis) string {
 
 func renderReportBody(src []byte, opts Options, analysis report.Analysis, plan report.ReportPlan) (string, error) {
 	if refs := semanticTimelineLists(plan.Components); len(refs) > 0 {
+		// Deliberate local wiring: opts is a value copy, so this write only
+		// carries refs into articleView's parse (field contract: options.go);
+		// the caller's Options are unaffected.
 		opts.semanticLists = refs
 		return articleView(src, opts)
 	}
@@ -168,37 +171,60 @@ func renderReportComponent(src []byte, opts Options, analysis report.Analysis, c
 	case report.ComponentTimeline:
 		return "", fmt.Errorf("timeline component requires full-document semantic rendering")
 	case report.ComponentPreformatted:
-		if analysis.Kind == report.KindBinary {
-			return `<section class="report-section"><h2>` + title + `</h2>` + binaryView(src, analysis) + `</section>`, nil
+		switch {
+		case analysis.Kind == report.KindBinary:
+			return reportSection(title, binaryView(src, analysis)), nil
+		case analysis.Kind == report.KindLog || strings.EqualFold(c.Title, "Log"):
+			return reportSection(title, logView(src)), nil
+		case analysis.Kind == report.KindTranscript || strings.EqualFold(c.Title, "Transcript"):
+			return reportSection(title, transcriptView(src)), nil
+		default:
+			return reportSection(title, textView(src)), nil
 		}
-		if analysis.Kind == report.KindLog || strings.EqualFold(c.Title, "Log") {
-			return `<section class="report-section"><h2>` + title + `</h2>` + logView(src) + `</section>`, nil
-		}
-		if analysis.Kind == report.KindTranscript || strings.EqualFold(c.Title, "Transcript") {
-			return `<section class="report-section"><h2>` + title + `</h2>` + transcriptView(src) + `</section>`, nil
-		}
-		return `<section class="report-section"><h2>` + title + `</h2>` + textView(src) + `</section>`, nil
 	case report.ComponentCodeBlock:
-		return `<section class="report-section"><h2>` + title + `</h2>` + codeView(src, opts, analysis) + `</section>`, nil
+		return reportSection(title, codeView(src, opts, analysis)), nil
 	case report.ComponentDataTable:
-		return `<section class="report-section"><h2>` + title + `</h2>` + dataTable(src, analysis) + `</section>`, nil
+		return reportSection(title, dataTable(src, analysis)), nil
 	case report.ComponentChart:
-		return `<section class="report-section"><h2>` + title + `</h2>` + chartView(src, analysis, c.Options) + `</section>`, nil
+		return reportSection(title, chartView(src, analysis, c.Options)), nil
 	case report.ComponentRecordCards:
-		return `<section class="report-section"><h2>` + title + `</h2>` + recordCards(src, analysis) + `</section>`, nil
+		return reportSection(title, recordCards(src, analysis)), nil
 	case report.ComponentReview:
-		return `<section class="report-section"><h2>` + title + `</h2>` + reviewCards(src, analysis) + `</section>`, nil
+		return reportSection(title, reviewCards(src, analysis)), nil
 	case report.ComponentDiffView:
-		return `<section class="report-section"><h2>` + title + `</h2>` + diffView(src) + `</section>`, nil
+		return reportSection(title, diffView(src)), nil
 	case report.ComponentFileTree:
-		return `<section class="report-section"><h2>` + title + `</h2>` + fileTree(src) + `</section>`, nil
+		return reportSection(title, fileTree(src)), nil
 	case report.ComponentSummary:
 		return summary(analysis), nil
 	case report.ComponentRawJSON:
-		return `<section class="report-section"><h2>` + title + `</h2>` + jsonView(src, analysis) + `</section>`, nil
+		return reportSection(title, jsonView(src, analysis)), nil
 	default:
-		return `<section class="report-section"><h2>` + title + `</h2>` + rawPre(src) + `</section>`, nil
+		return reportSection(title, rawPre(src)), nil
 	}
+}
+
+// reportSection wraps a rendered component body in the standard report
+// section shell. title must already be HTML-escaped by the caller.
+func reportSection(title, body string) string {
+	return `<section class="report-section"><h2>` + title + `</h2>` + body + `</section>`
+}
+
+// overviewList renders the shared overview shell: a definition list of
+// escaped label/value pairs, used by every report component overview (log,
+// transcript, text, binary, JSON, code, file tree, article, record cards).
+func overviewList(class, label string, items [][2]string) string {
+	var b strings.Builder
+	b.WriteString(`<dl class="` + class + `" aria-label="` + label + `">`)
+	for _, item := range items {
+		b.WriteString(`<div><dt>`)
+		b.WriteString(htmlpkg.EscapeString(item[0]))
+		b.WriteString(`</dt><dd>`)
+		b.WriteString(htmlpkg.EscapeString(item[1]))
+		b.WriteString(`</dd></div>`)
+	}
+	b.WriteString(`</dl>`)
+	return b.String()
 }
 
 func semanticTimelineLists(components []report.Component) []report.SourceRef {
